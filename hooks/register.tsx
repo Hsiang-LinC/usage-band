@@ -7,8 +7,14 @@ let contextPercent: number | undefined
 let rateLimits: LineInput['rateLimits'] = []
 let stopTick: (() => void) | undefined
 let stopPoll: (() => void) | undefined
+// main-thread requests in flight; the icon grows only while this is > 0
+let busy = 0
+let frame = 0
+let stopAnim: (() => void) | undefined
 
 const POLL_MS = 5_000
+const ANIM_MS = 500
+const ICON = ['·', '✧', '✦', '✶', '✦', '✧']
 
 // Hex: muted green, amber, vermilion red.
 const COLOR: Record<Level, string | undefined> = {
@@ -50,23 +56,38 @@ export const register: Register = on => {
   // loop, and only the latest request says how warm the cache is now
   on('turn.step', async function* ($, e, next) {
     const sentAt = await $.clock.now()
+    const isMain = e.agentId === undefined
     // a minute ticker phased on this request: it restarts the cache TTL, so
     // the countdown changes exactly when a whole minute crosses
-    if (e.agentId === undefined) {
+    if (isMain) {
       stopTick?.()
       stopTick = $.clock.every(60_000, () => redraw($))
     }
-    const r = yield* next(e)
-    if (r.usage && e.agentId === undefined) {
-      lastTurn = {
-        cachedAt: sentAt,
-        input: r.usage.input_tokens,
-        cacheRead: r.usage.cache_read_input_tokens,
-        cacheWrite: r.usage.cache_creation_input_tokens,
+    if (isMain && ++busy === 1) {
+      frame = 0
+      stopAnim = $.clock.every(ANIM_MS, () => {
+        frame = (frame + 1) % ICON.length
+        redraw($)
+      })
+    }
+    try {
+      const r = yield* next(e)
+      if (r.usage && isMain) {
+        lastTurn = {
+          cachedAt: sentAt,
+          input: r.usage.input_tokens,
+          cacheRead: r.usage.cache_read_input_tokens,
+          cacheWrite: r.usage.cache_creation_input_tokens,
+        }
+      }
+      return r
+    } finally {
+      if (isMain && --busy === 0) {
+        stopAnim?.()
+        frame = 0
       }
       redraw($)
     }
-    return r
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
@@ -82,6 +103,7 @@ export const register: Register = on => {
     const { Box, Text } = $.ui.resolve(e)
     return (
       <Box paddingX={1} backgroundColor={PANEL}>
+        <Text>{ICON[frame]} </Text>
         {segments.map((s, i) => (
           <Text key={String(i)}>
             {i > 0 ? <Text dimColor> · </Text> : null}
