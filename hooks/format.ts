@@ -16,14 +16,17 @@ export type LineInput = {
   now: number
 }
 
-const byUsed = (pct: number): Level => (pct >= 85 ? 'bad' : pct >= 60 ? 'warn' : 'ok')
+// Green <50, yellow <80, red after; shared by ctx and quota.
+const byUsed = (pct: number): Level => (pct >= 80 ? 'bad' : pct >= 50 ? 'warn' : 'ok')
 
 export function formatSegments(i: LineInput): Segment[] {
   const parts: Segment[] = []
 
   if (i.contextPercent !== undefined) {
     const pct = Math.floor(i.contextPercent)
-    parts.push({ text: `ctx ${pct}%`, level: byUsed(pct) })
+    const level = byUsed(pct)
+    const hint = level === 'bad' ? ' → /compact or hand off' : ''
+    parts.push({ text: `ctx ${pct}%${hint}`, level })
   }
 
   const t = i.lastTurn
@@ -38,8 +41,7 @@ export function formatSegments(i: LineInput): Segment[] {
     } else {
       const text =
         remaining < 60_000 ? 'cache <1m' : `cache ${Math.floor(remaining / 60_000)}m`
-      const level: Level =
-        remaining < 5 * 60_000 ? 'bad' : remaining < 15 * 60_000 ? 'warn' : 'ok'
+      const level: Level = remaining > 5 * 60_000 ? 'ok' : 'warn'
       parts.push({ text: text + hit, level })
     }
   }

@@ -37,6 +37,15 @@ test('levels follow usage and remaining cache time', () => {
       now,
     })
   expect(seg(0, 10).map(s => s.level)).toEqual(['ok', 'ok'])
-  expect(seg(50 * 60_000, 70).map(s => s.level)).toEqual(['warn', 'warn'])
-  expect(seg(58 * 60_000, 90).map(s => s.level)).toEqual(['bad', 'bad'])
+  expect(seg(50 * 60_000, 70).map(s => s.level)).toEqual(['ok', 'warn'])
+  expect(seg(56 * 60_000, 80).map(s => s.level)).toEqual(['warn', 'bad'])
+  expect(seg(61 * 60_000, 49).map(s => s.level)).toEqual(['bad', 'ok'])
+})
+
+test('ctx warns at 50%, and at 80% suggests compacting or handing off', () => {
+  const ctx = (contextPercent: number) =>
+    formatSegments({ contextPercent, rateLimits: [], now: 0 })[0]
+  expect(ctx(49.9)).toEqual({ text: 'ctx 49%', level: 'ok' })
+  expect(ctx(50)).toEqual({ text: 'ctx 50%', level: 'warn' })
+  expect(ctx(80)).toEqual({ text: 'ctx 80% → /compact or hand off', level: 'bad' })
 })
