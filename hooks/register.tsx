@@ -7,11 +7,11 @@ let contextPercent: number | undefined
 let rateLimits: LineInput['rateLimits'] = []
 let stopTick: (() => void) | undefined
 
-// Saturated hex; the yellow is an amber so it stays readable on light themes.
+// Saturated hex: emerald, orange-amber, brick red.
 const COLOR: Record<Level, string | undefined> = {
-  ok: '#22b04b',
-  warn: '#e09b00',
-  bad: '#f03e3e',
+  ok: '#50C878',
+  warn: '#FFA500',
+  bad: '#C73C2E',
   none: undefined,
 }
 
