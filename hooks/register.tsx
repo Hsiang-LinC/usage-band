@@ -14,9 +14,9 @@ let stopAnim: (() => void) | undefined
 
 const POLL_MS = 5_000
 const ANIM_MS = 200
-const STARS = ['✶', '✷', '✸', '✹', '✺']
-// the star cycle runs once per color, three colors per loop
-const STAR_COLORS = ['#F1E5AC', '#F1E3A4', '#F8E1B7']
+const STARS = ['✶', '✴', '✷', '✦', '✧', '✦']
+// the star cycle runs once per color: starlight gold, aurora blue, aurora red
+const STAR_COLORS = ['#F2C94C', '#4FC3F7', '#EF5B7A']
 const ICON = STAR_COLORS.flatMap(color => STARS.map(glyph => ({ glyph, color })))
 
 // Hex: muted green, amber, vermilion red.
