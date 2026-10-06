@@ -46,7 +46,7 @@ export function formatSegments(i: LineInput): Segment[] {
   } else {
     const total = t.input + t.cacheRead + t.cacheWrite
     const remaining = t.cachedAt + CACHE_TTL_MS - i.now
-    const hit = total > 0 ? ` hit ${Math.floor((t.cacheRead / total) * 100)}%` : ''
+    const hit = total > 0 ? ` · hit ${Math.floor((t.cacheRead / total) * 100)}%` : ''
     if (remaining <= 0) {
       parts.push({ text: 'cache cold', level: 'bad', group: 'session' })
     } else {
@@ -66,7 +66,7 @@ export function formatSegments(i: LineInput): Segment[] {
       const pct = Math.floor(w.percentUsed)
       const reset = kind === 'five_hour' ? untilReset(w.resetsAt, i.now) : undefined
       parts.push({
-        text: `${label} ${pct}%${reset ? ` (resets ${reset})` : ''}`,
+        text: `${label} ${pct}%${reset ? ` ↻ ${reset}` : ''}`,
         level: byUsed(pct),
         group: 'quota',
       })

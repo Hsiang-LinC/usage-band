@@ -12,7 +12,7 @@ test('formats ctx, cache, hit and quota used', () => {
     lastTurn: { cachedAt: 0, input: 100, cacheRead: 900, cacheWrite: 0 },
     now: 60_000,
   })
-  expect(line).toBe('ctx 42% · cache 59m hit 90% · 5h 20% · 7d 70%')
+  expect(line).toBe('ctx 42% · cache 59m · hit 90% · 5h 20% · 7d 70%')
 })
 
 test('cache goes cold after the TTL and absent data is skipped', () => {
@@ -61,8 +61,8 @@ test('5h shows time to reset; past or missing reset is omitted', () => {
       now,
     })
   const t = (ms: number) => new Date(ms).toISOString()
-  expect(at(t(2 * 3_600_000 + 13 * 60_000))).toBe('cache -- · 5h 10% (resets 2h13m)')
-  expect(at(t(45 * 60_000))).toBe('cache -- · 5h 10% (resets 45m)')
+  expect(at(t(2 * 3_600_000 + 13 * 60_000))).toBe('cache -- · 5h 10% ↻ 2h13m')
+  expect(at(t(45 * 60_000))).toBe('cache -- · 5h 10% ↻ 45m')
   expect(at(t(1_000), 5_000)).toBe('cache -- · 5h 10%')
   expect(at(undefined)).toBe('cache -- · 5h 10%')
 })
@@ -87,4 +87,16 @@ test('ctx and cache are the session group, 5h and 7d the quota group', () => {
     now: 0,
   }).map(s => s.group)
   expect(groups).toEqual(['session', 'session', 'quota', 'quota'])
+})
+
+
+test('hit disappears exactly when the cache expires, without a trailing separator', () => {
+  const at = (now: number) => formatSegments({
+    rateLimits: [],
+    lastTurn: { cachedAt: 0, input: 100, cacheRead: 900, cacheWrite: 0 },
+    now,
+  })[0].text
+  expect(at(3_599_999)).toBe('cache <1m · hit 90%')
+  expect(at(3_600_000)).toBe('cache cold')
+  expect(at(3_600_001)).toBe('cache cold')
 })
