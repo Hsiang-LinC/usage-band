@@ -13,8 +13,11 @@ let frame = 0
 let stopAnim: (() => void) | undefined
 
 const POLL_MS = 5_000
-const ANIM_MS = 500
-const ICON = ['·', '✧', '✦', '✶', '✦', '✧']
+const ANIM_MS = 200
+const STARS = ['✶', '✷', '✸', '✹', '✺']
+// the star cycle runs once per color, three colors per loop
+const STAR_COLORS = ['#F1E5AC', '#F1E3A4', '#F8E1B7']
+const ICON = STAR_COLORS.flatMap(color => STARS.map(glyph => ({ glyph, color })))
 
 // Hex: muted green, amber, vermilion red.
 const COLOR: Record<Level, string | undefined> = {
@@ -103,7 +106,7 @@ export const register: Register = on => {
     const { Box, Text } = $.ui.resolve(e)
     return (
       <Box paddingX={1} backgroundColor={PANEL}>
-        <Text>{ICON[frame]} </Text>
+        <Text color={ICON[frame].color}>{ICON[frame].glyph} </Text>
         {segments.map((s, i) => (
           <Text key={String(i)}>
             {i > 0 ? <Text dimColor> · </Text> : null}
