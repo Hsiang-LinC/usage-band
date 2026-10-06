@@ -19,7 +19,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `hooks/register.tsx` is the imperative shell: module-level state fed by engine events, rendered by the `ui.render` handler on the `AbovePrompt` component (skipped when `hasSurvey`).
   - `session.start` / `session.measure` update ctx and rate limits; a 5s poll covers idle sessions.
   - `turn.step` (per request, not per turn) records `lastTurn` for the cache figures. `cachedAt` is the time the request was *sent*, because that is when the TTL restarts. Only main-thread steps (`agentId === undefined`) count; sub-agents are ignored. A 60s ticker phased on each request redraws the countdown; a `busy` counter drives the 200ms star animation only while requests are in flight.
-- Colors and the panel background are hex constants in `register.tsx`; level → color mapping is there, level decisions are in `format.ts`.
+- Light/dark palettes, neutral separators, value-only bold styling and the ochre/blue-grey/vermilion star cycle live in `register.tsx`. Built-in themes follow `$.config.list()`; auto/custom themes read macOS appearance with a 1s process timeout and a 5s cached promise. Level decisions remain in `format.ts`.
 
 ## Conventions
 

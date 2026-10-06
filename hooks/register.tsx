@@ -15,20 +15,49 @@ let stopAnim: (() => void) | undefined
 const POLL_MS = 5_000
 const ANIM_MS = 200
 const STARS = ['✶', '✴', '✷', '✦', '✧', '✦']
-// the star cycle runs once per color: starlight gold, aurora blue, aurora red
-const STAR_COLORS = ['#F2C94C', '#4FC3F7', '#EF5B7A']
-const ICON = STAR_COLORS.flatMap(color => STARS.map(glyph => ({ glyph, color })))
+// One full shape cycle (1.2s) per colour; no opacity blinking.
+const FRAME_COUNT = STARS.length * 3
+const PALETTES = {
+  light: {
+    panel: '#E4E6DF', neutral: '#61675F',
+    colors: { ok: '#286044', warn: '#755812', bad: '#983E32', none: '#61675F' },
+    stars: ['#755812', '#416579', '#983E32'],
+  },
+  dark: {
+    panel: '#2C302D', neutral: '#A2A99F',
+    colors: { ok: '#82B58B', warn: '#C5A35B', bad: '#DC9180', none: '#A2A99F' },
+    stars: ['#C5A35B', '#8BAABD', '#DC9180'],
+  },
+} satisfies Record<'light' | 'dark', {
+  panel: string; neutral: string; colors: Record<Level, string>; stars: string[]
+}>
 
-// Hex: muted green, amber, vermilion red.
-const COLOR: Record<Level, string | undefined> = {
-  ok: '#5E8F55',
-  warn: '#c9a400',
-  bad: '#e2421f',
-  none: undefined,
+// The mod API exposes the selected theme, not auto's resolved appearance.
+// On macOS, auto/custom themes follow system appearance, cached for 5s.
+let systemAppearance: Promise<'light' | 'dark'> | undefined
+let appearanceExpires = 0
+async function palette($: EngineInterface) {
+  const theme = (await $.config.list()).find(row => row.key === 'theme')?.value
+  if (typeof theme !== 'string') throw new Error('usage-band: missing theme config')
+  if (/^light(?:-|$)/.test(theme)) return PALETTES.light
+  if (/^dark(?:-|$)/.test(theme)) return PALETTES.dark
+  if (theme !== 'auto' && !theme.startsWith('custom:')) {
+    throw new Error('usage-band: unsupported theme selection')
+  }
+  const now = await $.clock.now()
+  if (!systemAppearance || now >= appearanceExpires) {
+    appearanceExpires = now + POLL_MS
+    systemAppearance = $.process.run(
+      ['/usr/bin/defaults', 'read', '-g', 'AppleInterfaceStyle'],
+      { timeoutMs: 1000 },
+    ).then(result => {
+      if (result.exitCode === 0 && result.stdout.trim() === 'Dark') return 'dark'
+      if (result.exitCode === 1 && /AppleInterfaceStyle.*does not exist/.test(result.stderr)) return 'light'
+      throw new Error('usage-band: cannot read macOS system appearance')
+    })
+  }
+  return PALETTES[await systemAppearance]
 }
-
-// Faint gray layer so the band reads apart from the context above it.
-const PANEL = '#F4F4F0'
 
 const redraw = ($: EngineInterface) => $.ui.invalidate('ui.render')
 
@@ -69,7 +98,7 @@ export const register: Register = on => {
     if (isMain && ++busy === 1) {
       frame = 0
       stopAnim = $.clock.every(ANIM_MS, () => {
-        frame = (frame + 1) % ICON.length
+        frame = (frame + 1) % FRAME_COUNT
         redraw($)
       })
     }
@@ -104,16 +133,20 @@ export const register: Register = on => {
     if (segments.length === 0) return next(e)
 
     const { Box, Text } = $.ui.resolve(e)
+    const theme = await palette($)
     return (
-      <Box paddingX={1} backgroundColor={PANEL}>
-        <Text color={ICON[frame].color}>{ICON[frame].glyph} </Text>
+      <Box paddingX={1} backgroundColor={theme.panel}>
+        <Text color={theme.stars[Math.floor(frame / STARS.length)]}>{STARS[frame % STARS.length]} </Text>
         {segments.map((s, i) => (
           <Text key={String(i)}>
             {i > 0 ? (
-              <Text dimColor>{segments[i - 1].group === s.group ? ' · ' : ' │ '}</Text>
+              <Text color={theme.neutral}>{segments[i - 1].group === s.group ? ' · ' : ' │ '}</Text>
             ) : null}
-            <Text color={COLOR[s.level]} dimColor={s.level === 'none'}>
-              {s.text}
+            <Text color={theme.colors[s.level]}>
+              <Text>{s.text.slice(0, s.text.indexOf(' ') + 1)}</Text>
+              {s.text.slice(s.text.indexOf(' ') + 1).split(/(<?\d+(?:h\d+)?[hm%])/).map((text, j) => (
+                <Text key={String(j)} bold={/^(<?\d+(?:h\d+)?[hm%])$/.test(text)}>{text}</Text>
+              ))}
             </Text>
           </Text>
         ))}
