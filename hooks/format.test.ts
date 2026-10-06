@@ -45,9 +45,13 @@ test('levels follow usage and remaining cache time', () => {
 test('ctx warns at 50%, and at 80% suggests compacting or handing off', () => {
   const ctx = (contextPercent: number) =>
     formatSegments({ contextPercent, rateLimits: [], now: 0 })[0]
-  expect(ctx(49.9)).toEqual({ text: 'ctx 49%', level: 'ok' })
-  expect(ctx(50)).toEqual({ text: 'ctx 50%', level: 'warn' })
-  expect(ctx(80)).toEqual({ text: 'ctx 80% → /compact or hand off', level: 'bad' })
+  expect(ctx(49.9)).toEqual({ text: 'ctx 49%', level: 'ok', group: 'session' })
+  expect(ctx(50)).toEqual({ text: 'ctx 50%', level: 'warn', group: 'session' })
+  expect(ctx(80)).toEqual({
+    text: 'ctx 80% → /compact or hand off',
+    level: 'bad',
+    group: 'session',
+  })
 })
 
 test('5h shows time to reset; past or missing reset is omitted', () => {
@@ -61,4 +65,26 @@ test('5h shows time to reset; past or missing reset is omitted', () => {
   expect(at(t(45 * 60_000))).toBe('cache -- · 5h 10% (resets 45m)')
   expect(at(t(1_000), 5_000)).toBe('cache -- · 5h 10%')
   expect(at(undefined)).toBe('cache -- · 5h 10%')
+})
+
+test('a cold cache drops the hit rate, since nothing is cached to hit', () => {
+  expect(
+    formatLine({
+      rateLimits: [],
+      lastTurn: { cachedAt: 0, input: 100, cacheRead: 900, cacheWrite: 0 },
+      now: 3_700_000,
+    }),
+  ).toBe('cache cold')
+})
+
+test('ctx and cache are the session group, 5h and 7d the quota group', () => {
+  const groups = formatSegments({
+    contextPercent: 1,
+    rateLimits: [
+      { kind: 'five_hour', percentUsed: 1 },
+      { kind: 'seven_day', percentUsed: 1 },
+    ],
+    now: 0,
+  }).map(s => s.group)
+  expect(groups).toEqual(['session', 'session', 'quota', 'quota'])
 })

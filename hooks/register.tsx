@@ -109,7 +109,9 @@ export const register: Register = on => {
         <Text color={ICON[frame].color}>{ICON[frame].glyph} </Text>
         {segments.map((s, i) => (
           <Text key={String(i)}>
-            {i > 0 ? <Text dimColor> · </Text> : null}
+            {i > 0 ? (
+              <Text dimColor>{segments[i - 1].group === s.group ? ' · ' : ' │ '}</Text>
+            ) : null}
             <Text color={COLOR[s.level]} dimColor={s.level === 'none'}>
               {s.text}
             </Text>

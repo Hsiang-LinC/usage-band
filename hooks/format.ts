@@ -1,7 +1,8 @@
 export const CACHE_TTL_MS = 60 * 60 * 1000
 
 export type Level = 'ok' | 'warn' | 'bad' | 'none'
-export type Segment = { text: string; level: Level }
+// session: ctx and cache; quota: 5h and 7d. The band separates the two groups.
+export type Segment = { text: string; level: Level; group: 'session' | 'quota' }
 
 export type LineInput = {
   contextPercent?: number
@@ -36,23 +37,23 @@ export function formatSegments(i: LineInput): Segment[] {
     const pct = Math.floor(i.contextPercent)
     const level = byUsed(pct)
     const hint = level === 'bad' ? ' → /compact or hand off' : ''
-    parts.push({ text: `ctx ${pct}%${hint}`, level })
+    parts.push({ text: `ctx ${pct}%${hint}`, level, group: 'session' })
   }
 
   const t = i.lastTurn
   if (t === undefined) {
-    parts.push({ text: 'cache --', level: 'none' })
+    parts.push({ text: 'cache --', level: 'none', group: 'session' })
   } else {
     const total = t.input + t.cacheRead + t.cacheWrite
     const remaining = t.cachedAt + CACHE_TTL_MS - i.now
     const hit = total > 0 ? ` hit ${Math.floor((t.cacheRead / total) * 100)}%` : ''
     if (remaining <= 0) {
-      parts.push({ text: 'cache cold' + hit, level: 'bad' })
+      parts.push({ text: 'cache cold', level: 'bad', group: 'session' })
     } else {
       const text =
         remaining < 60_000 ? 'cache <1m' : `cache ${Math.floor(remaining / 60_000)}m`
       const level: Level = remaining > 5 * 60_000 ? 'ok' : 'warn'
-      parts.push({ text: text + hit, level })
+      parts.push({ text: text + hit, level, group: 'session' })
     }
   }
 
@@ -67,6 +68,7 @@ export function formatSegments(i: LineInput): Segment[] {
       parts.push({
         text: `${label} ${pct}%${reset ? ` (resets ${reset})` : ''}`,
         level: byUsed(pct),
+        group: 'quota',
       })
     }
   }
