@@ -6,6 +6,9 @@ let lastTurn: LineInput['lastTurn']
 let contextPercent: number | undefined
 let rateLimits: LineInput['rateLimits'] = []
 let stopTick: (() => void) | undefined
+let stopPoll: (() => void) | undefined
+
+const POLL_MS = 5_000
 
 // Saturated hex: emerald, orange-amber, brick red.
 const COLOR: Record<Level, string | undefined> = {
@@ -17,12 +20,19 @@ const COLOR: Record<Level, string | undefined> = {
 
 const redraw = ($: EngineInterface) => $.ui.invalidate('ui.render')
 
+async function refreshUsage($: EngineInterface) {
+  const u = await $.session.usage()
+  contextPercent = u.context.percent
+  rateLimits = u.rateLimits
+  redraw($)
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
-    const u = await $.session.usage()
-    contextPercent = u.context.percent
-    rateLimits = u.rateLimits
-    redraw($)
+    await refreshUsage($)
+    // keeps 5h/7d fresh in idle sessions, where no measure event fires
+    stopPoll?.()
+    stopPoll = $.clock.every(POLL_MS, () => refreshUsage($))
     return next(e)
   })
 
