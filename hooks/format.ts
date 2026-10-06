@@ -5,10 +5,11 @@ export type Segment = { text: string; level: Level }
 
 export type LineInput = {
   contextPercent?: number
-  rateLimits: { kind: string; percentUsed: number }[]
-  // Last counted turn: its cache figures and when it ended (ms).
+  rateLimits: { kind: string; percentUsed: number; resetsAt?: string }[]
+  // Last counted request: its cache figures and when it was sent (ms); the
+  // cache TTL restarts when a request reads or writes it, not when it ends.
   lastTurn?: {
-    endedAt: number
+    cachedAt: number
     input: number
     cacheRead: number
     cacheWrite: number
@@ -18,6 +19,15 @@ export type LineInput = {
 
 // Green <50, yellow <80, red after; shared by ctx and quota.
 const byUsed = (pct: number): Level => (pct >= 80 ? 'bad' : pct >= 50 ? 'warn' : 'ok')
+
+// "2h13m" / "45m"; undefined once the window has already reset.
+function untilReset(resetsAt: string | undefined, now: number): string | undefined {
+  if (resetsAt === undefined) return undefined
+  const ms = Date.parse(resetsAt) - now
+  if (!(ms > 0)) return undefined
+  const mins = Math.max(1, Math.floor(ms / 60_000))
+  return mins >= 60 ? `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, '0')}m` : `${mins}m`
+}
 
 export function formatSegments(i: LineInput): Segment[] {
   const parts: Segment[] = []
@@ -34,7 +44,7 @@ export function formatSegments(i: LineInput): Segment[] {
     parts.push({ text: 'cache --', level: 'none' })
   } else {
     const total = t.input + t.cacheRead + t.cacheWrite
-    const remaining = t.endedAt + CACHE_TTL_MS - i.now
+    const remaining = t.cachedAt + CACHE_TTL_MS - i.now
     const hit = total > 0 ? ` hit ${Math.floor((t.cacheRead / total) * 100)}%` : ''
     if (remaining <= 0) {
       parts.push({ text: 'cache cold' + hit, level: 'bad' })
@@ -53,7 +63,11 @@ export function formatSegments(i: LineInput): Segment[] {
     const w = i.rateLimits.find(r => r.kind === kind)
     if (w) {
       const pct = Math.floor(w.percentUsed)
-      parts.push({ text: `${label} ${pct}%`, level: byUsed(pct) })
+      const reset = kind === 'five_hour' ? untilReset(w.resetsAt, i.now) : undefined
+      parts.push({
+        text: `${label} ${pct}%${reset ? ` (resets ${reset})` : ''}`,
+        level: byUsed(pct),
+      })
     }
   }
 

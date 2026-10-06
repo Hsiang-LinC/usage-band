@@ -9,7 +9,7 @@ test('formats ctx, cache, hit and quota used', () => {
       { kind: 'five_hour', percentUsed: 20.5 },
       { kind: 'seven_day', percentUsed: 70 },
     ],
-    lastTurn: { endedAt: 0, input: 100, cacheRead: 900, cacheWrite: 0 },
+    lastTurn: { cachedAt: 0, input: 100, cacheRead: 900, cacheWrite: 0 },
     now: 60_000,
   })
   expect(line).toBe('ctx 42% · cache 59m hit 90% · 5h 20% · 7d 70%')
@@ -19,7 +19,7 @@ test('cache goes cold after the TTL and absent data is skipped', () => {
   expect(
     formatLine({
       rateLimits: [],
-      lastTurn: { endedAt: 0, input: 0, cacheRead: 0, cacheWrite: 0 },
+      lastTurn: { cachedAt: 0, input: 0, cacheRead: 0, cacheWrite: 0 },
       now: 3_700_000,
     }),
   ).toBe('cache cold')
@@ -33,7 +33,7 @@ test('levels follow usage and remaining cache time', () => {
   const seg = (now: number, five: number) =>
     formatSegments({
       rateLimits: [{ kind: 'five_hour', percentUsed: five }],
-      lastTurn: { endedAt: 0, input: 0, cacheRead: 0, cacheWrite: 0 },
+      lastTurn: { cachedAt: 0, input: 0, cacheRead: 0, cacheWrite: 0 },
       now,
     })
   expect(seg(0, 10).map(s => s.level)).toEqual(['ok', 'ok'])
@@ -48,4 +48,17 @@ test('ctx warns at 50%, and at 80% suggests compacting or handing off', () => {
   expect(ctx(49.9)).toEqual({ text: 'ctx 49%', level: 'ok' })
   expect(ctx(50)).toEqual({ text: 'ctx 50%', level: 'warn' })
   expect(ctx(80)).toEqual({ text: 'ctx 80% → /compact or hand off', level: 'bad' })
+})
+
+test('5h shows time to reset; past or missing reset is omitted', () => {
+  const at = (resetsAt?: string, now = 0) =>
+    formatLine({
+      rateLimits: [{ kind: 'five_hour', percentUsed: 10, resetsAt }],
+      now,
+    })
+  const t = (ms: number) => new Date(ms).toISOString()
+  expect(at(t(2 * 3_600_000 + 13 * 60_000))).toBe('cache -- · 5h 10% (resets 2h13m)')
+  expect(at(t(45 * 60_000))).toBe('cache -- · 5h 10% (resets 45m)')
+  expect(at(t(1_000), 5_000)).toBe('cache -- · 5h 10%')
+  expect(at(undefined)).toBe('cache -- · 5h 10%')
 })

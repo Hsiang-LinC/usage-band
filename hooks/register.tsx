@@ -5,11 +5,13 @@ import { formatSegments, type Level, type LineInput } from './format'
 let lastTurn: LineInput['lastTurn']
 let contextPercent: number | undefined
 let rateLimits: LineInput['rateLimits'] = []
+let stopTick: (() => void) | undefined
 
+// Saturated hex; the yellow is an amber so it stays readable on light themes.
 const COLOR: Record<Level, string | undefined> = {
-  ok: 'green',
-  warn: 'yellow',
-  bad: 'red',
+  ok: '#22b04b',
+  warn: '#e09b00',
+  bad: '#f03e3e',
   none: undefined,
 }
 
@@ -21,8 +23,6 @@ export const register: Register = on => {
     contextPercent = u.context.percent
     rateLimits = u.rateLimits
     redraw($)
-    // keeps the cache countdown moving between events
-    $.clock.every(15_000, () => redraw($))
     return next(e)
   })
 
@@ -36,10 +36,17 @@ export const register: Register = on => {
   // per request, not per turn: a turn's usage sums every request of its tool
   // loop, and only the latest request says how warm the cache is now
   on('turn.step', async function* ($, e, next) {
+    const sentAt = await $.clock.now()
+    // a minute ticker phased on this request: it restarts the cache TTL, so
+    // the countdown changes exactly when a whole minute crosses
+    if (e.agentId === undefined) {
+      stopTick?.()
+      stopTick = $.clock.every(60_000, () => redraw($))
+    }
     const r = yield* next(e)
     if (r.usage && e.agentId === undefined) {
       lastTurn = {
-        endedAt: await $.clock.now(),
+        cachedAt: sentAt,
         input: r.usage.input_tokens,
         cacheRead: r.usage.cache_read_input_tokens,
         cacheWrite: r.usage.cache_creation_input_tokens,
