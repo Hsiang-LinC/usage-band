@@ -10,13 +10,16 @@ let stopPoll: (() => void) | undefined
 
 const POLL_MS = 5_000
 
-// Saturated hex: emerald, orange-amber, brick red.
+// Hex: muted green, amber, vermilion red.
 const COLOR: Record<Level, string | undefined> = {
-  ok: '#50C878',
-  warn: '#FFA500',
-  bad: '#C73C2E',
+  ok: '#5E8F55',
+  warn: '#c9a400',
+  bad: '#e2421f',
   none: undefined,
 }
+
+// Faint gray layer so the band reads apart from the context above it.
+const PANEL = '#F4F4F0'
 
 const redraw = ($: EngineInterface) => $.ui.invalidate('ui.render')
 
@@ -78,7 +81,7 @@ export const register: Register = on => {
 
     const { Box, Text } = $.ui.resolve(e)
     return (
-      <Box>
+      <Box paddingX={1} backgroundColor={PANEL}>
         {segments.map((s, i) => (
           <Text key={String(i)}>
             {i > 0 ? <Text dimColor> · </Text> : null}
