@@ -1,6 +1,6 @@
 {
   "name": "usage",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Band above prompt: ctx %, prompt-cache countdown and hit rate, 5h/7d quota used",
   "author": {
     "name": "Hsiang-Lin Chan"
