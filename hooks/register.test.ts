@@ -42,3 +42,37 @@ for (const appearance of ['light', 'dark'] as const) {
     await refreshed.unmount()
   })
 }
+
+test('cache figures follow every main-thread request, even after the cache went cold', async ($, on) => {
+  const clock = mock.clock(on)
+  on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
+  let cacheRead = 0
+  on('turn.step', async function* (_$, e) {
+    return {
+      turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const,
+      usage: { model: e.model, input_tokens: 100, output_tokens: 1, cache_read_input_tokens: cacheRead, cache_creation_input_tokens: 900 - cacheRead },
+    }
+  })
+  const step = async (index: number) => {
+    const stream = $.turn.step({ turnId: 't', index, model: 'm', messageCount: 1 })
+    for await (const _ of stream) { /* drain */ }
+  }
+  const target = { plugin: 'usage', surface: 'terminal' as const, component: 'AbovePrompt' as const, requestId: 'cache-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } }
+  const shows = async (text: RegExp) => {
+    const ui = await $.ui.mount(target)
+    const found = (await ui.find({ type: 'Text', text })) !== undefined
+    await ui.unmount()
+    return found
+  }
+
+  await step(0)
+  expect(await shows(/^0%$/)).toBe(true)
+
+  await clock.advance(61 * 60_000)
+  expect(await shows(/^cold$/)).toBe(true)
+
+  cacheRead = 900
+  await step(1)
+  expect(await shows(/^cold$/)).toBe(false)
+  expect(await shows(/^90%$/)).toBe(true)
+})

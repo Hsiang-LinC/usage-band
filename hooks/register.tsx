@@ -1,16 +1,16 @@
-import type { EngineInterface, Register } from 'claude-code'
+import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import { formatSegments, type Level, type LineInput } from './format'
 
 let lastTurn: LineInput['lastTurn']
 let contextPercent: number | undefined
 let rateLimits: LineInput['rateLimits'] = []
-let stopTick: (() => void) | undefined
-let stopPoll: (() => void) | undefined
+let tick: Timer | undefined
+let poll: Timer | undefined
 // main-thread requests in flight; the icon grows only while this is > 0
 let busy = 0
 let frame = 0
-let stopAnim: (() => void) | undefined
+let anim: Timer | undefined
 
 const POLL_MS = 5_000
 const ANIM_MS = 200
@@ -72,8 +72,8 @@ export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await refreshUsage($)
     // keeps 5h/7d fresh in idle sessions, where no measure event fires
-    stopPoll?.()
-    stopPoll = $.clock.every(POLL_MS, () => refreshUsage($))
+    poll?.cancel()
+    poll = $.clock.every(POLL_MS, () => refreshUsage($))
     return next(e)
   })
 
@@ -92,12 +92,12 @@ export const register: Register = on => {
     // a minute ticker phased on this request: it restarts the cache TTL, so
     // the countdown changes exactly when a whole minute crosses
     if (isMain) {
-      stopTick?.()
-      stopTick = $.clock.every(60_000, () => redraw($))
+      tick?.cancel()
+      tick = $.clock.every(60_000, () => redraw($))
     }
     if (isMain && ++busy === 1) {
       frame = 0
-      stopAnim = $.clock.every(ANIM_MS, () => {
+      anim = $.clock.every(ANIM_MS, () => {
         frame = (frame + 1) % FRAME_COUNT
         redraw($)
       })
@@ -115,7 +115,8 @@ export const register: Register = on => {
       return r
     } finally {
       if (isMain && --busy === 0) {
-        stopAnim?.()
+        anim?.cancel()
+        anim = undefined
         frame = 0
       }
       redraw($)
