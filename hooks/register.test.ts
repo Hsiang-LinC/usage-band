@@ -21,6 +21,24 @@ for (const surface of ['terminal', 'desktop'] as const) {
   }
 }
 
+for (const surface of ['terminal', 'desktop'] as const) {
+  test(`${surface}: the segments are one inline run beside the icon`, async ($, on) => {
+    mock.clock(on)
+    on('session.measure', () => ({ changed: [] }))
+    on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
+    await $.session.measure({ context: { percent: 32 }, rateLimits: [{ kind: 'five_hour', percentUsed: 86 }] })
+    const ui = await $.ui.mount({ plugin: 'usage', surface, component: 'AbovePrompt', requestId: 'run-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
+    // the desktop draws Box as a flex row and trims the whitespace at each
+    // flex item's edges, so separators must sit inside one Text, not between
+    const root = await ui.drawn()
+    expect(root.type).toBe('Box')
+    expect(root.children).toMatchObject([{ type: 'Box', props: { width: 2 } }, { type: 'Text' }])
+    const run = (await ui.findAll({ type: 'Text' })).find(text => /^ctx /.test(text.text))
+    expect(run?.text).toBe('ctx 32% · cache -- │ 5h 86%')
+    await ui.unmount()
+  })
+}
+
 for (const appearance of ['light', 'dark'] as const) {
   test(`auto uses macOS ${appearance} appearance and caches detection`, async ($, on) => {
     const clock = mock.clock(on)

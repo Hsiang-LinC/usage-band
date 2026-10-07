@@ -173,19 +173,23 @@ export const register: Register = on => {
         <Box width={2} flexShrink={0}>
           <Text color={theme.stars[Math.floor(frame / STARS.length)]}>{STARS[frame % STARS.length]}</Text>
         </Box>
-        {segments.map((s, i) => (
-          <Text key={String(i)}>
-            {i > 0 ? (
-              <Text color={theme.neutral}>{segments[i - 1].group === s.group ? ' · ' : ' │ '}</Text>
-            ) : null}
-            <Text color={theme.colors[s.level]}>
-              <Text>{s.text.slice(0, s.text.indexOf(' ') + 1)}</Text>
-              {s.text.slice(s.text.indexOf(' ') + 1).split(/(<?\d+(?:h\d+)?[hm%])/).map((text, j) => (
-                <Text key={String(j)} bold={/^(<?\d+(?:h\d+)?[hm%])$/.test(text)}>{text}</Text>
-              ))}
+        {/* one inline run: the desktop draws Box as a flex row and trims the
+            whitespace at each flex item's edges, which would eat the separators' spaces */}
+        <Text>
+          {segments.map((s, i) => (
+            <Text key={String(i)}>
+              {i > 0 ? (
+                <Text color={theme.neutral}>{segments[i - 1].group === s.group ? ' · ' : ' │ '}</Text>
+              ) : null}
+              <Text color={theme.colors[s.level]}>
+                <Text>{s.text.slice(0, s.text.indexOf(' ') + 1)}</Text>
+                {s.text.slice(s.text.indexOf(' ') + 1).split(/(<?\d+(?:h\d+)?[hm%])/).filter(text => text !== '').map((text, j) => (
+                  <Text key={String(j)} bold={/^(<?\d+(?:h\d+)?[hm%])$/.test(text)}>{text}</Text>
+                ))}
+              </Text>
             </Text>
-          </Text>
-        ))}
+          ))}
+        </Text>
       </Box>
     )
   })
