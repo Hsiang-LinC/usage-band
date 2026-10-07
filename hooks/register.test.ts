@@ -169,3 +169,26 @@ test('a request that answers without usage rolls the countdown back', async ($, 
   await clock.advance(1_000)
   expect(await shows(/^✶$/)).toBe(true)
 })
+
+test('the icon animates while a request runs and rests once it ends, though the cache is warm', async ($, on) => {
+  const clock = mock.clock(on)
+  on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
+  const steps = stepper($, on, clock)
+  const shows = async (text: RegExp) => {
+    const ui = await $.ui.mount(bandTarget)
+    const found = (await ui.find({ type: 'Text', text })) !== undefined
+    await ui.unmount()
+    return found
+  }
+
+  const done = await steps.send()
+  await clock.advance(200)
+  expect(await shows(/^✴$/)).toBe(true)
+
+  steps.answer({ cacheRead: 900 })
+  await done.answered
+  // idle frames would redraw the band 5 times a second for the cache's hour
+  await clock.advance(200)
+  expect(await shows(/^59m$/)).toBe(true)
+  expect(await shows(/^✶$/)).toBe(true)
+})
