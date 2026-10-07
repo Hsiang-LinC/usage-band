@@ -8,7 +8,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
       on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: theme, provider: { kind: 'engine' }, isLocked: false }] }))
       await $.session.measure({ context: { percent: 32 }, rateLimits: [{ kind: 'five_hour', percentUsed: 86 }] })
       const ui = await $.ui.mount({ plugin: 'usage', surface, component: 'AbovePrompt', requestId: 'band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
-      expect(await ui.drawn()).toMatchObject({ type: 'Box', props: { backgroundColor: theme === 'light' ? '#E4E6DF' : '#2C302D' } })
+      expect((await ui.drawn()).props.backgroundColor).toBeUndefined()
       expect((await ui.find({ type: 'Text', text: /^32%$/ }))?.props).toMatchObject({ bold: true })
       expect((await ui.find({ type: 'Text', text: /^ctx $/ }))?.props.bold).not.toBe(true)
       expect((await ui.find({ type: 'Text', text: /^86%$/ }))?.props).toMatchObject({ bold: true })
@@ -30,7 +30,8 @@ for (const appearance of ['light', 'dark'] as const) {
     })
     const target = { plugin: 'usage', surface: 'terminal' as const, component: 'AbovePrompt' as const, requestId: 'auto-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } }
     const ui = await $.ui.mount(target)
-    expect(await ui.drawn()).toMatchObject({ type: 'Box', props: { backgroundColor: appearance === 'light' ? '#E4E6DF' : '#2C302D' } })
+    expect((await ui.drawn()).props.backgroundColor).toBeUndefined()
+    expect((await ui.findAll({ type: 'Text', text: /^cache --$/ })).some(element => element.props.color === (appearance === 'light' ? '#61675F' : '#A2A99F'))).toBe(true)
     await ui.unmount()
     const again = await $.ui.mount(target)
     expect(reads).toBe(1)

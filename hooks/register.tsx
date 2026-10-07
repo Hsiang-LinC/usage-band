@@ -19,17 +19,17 @@ const STARS = ['✶', '✴', '✷', '✦', '✧', '✦']
 const FRAME_COUNT = STARS.length * 3
 const PALETTES = {
   light: {
-    panel: '#E4E6DF', neutral: '#61675F',
+    neutral: '#61675F',
     colors: { ok: '#286044', warn: '#755812', bad: '#983E32', none: '#61675F' },
     stars: ['#755812', '#416579', '#983E32'],
   },
   dark: {
-    panel: '#2C302D', neutral: '#A2A99F',
+    neutral: '#A2A99F',
     colors: { ok: '#82B58B', warn: '#C5A35B', bad: '#DC9180', none: '#A2A99F' },
     stars: ['#C5A35B', '#8BAABD', '#DC9180'],
   },
 } satisfies Record<'light' | 'dark', {
-  panel: string; neutral: string; colors: Record<Level, string>; stars: string[]
+  neutral: string; colors: Record<Level, string>; stars: string[]
 }>
 
 // The mod API exposes the selected theme, not auto's resolved appearance.
@@ -135,7 +135,7 @@ export const register: Register = on => {
     const { Box, Text } = $.ui.resolve(e)
     const theme = await palette($)
     return (
-      <Box paddingX={1} backgroundColor={theme.panel}>
+      <Box paddingX={1}>
         <Text color={theme.stars[Math.floor(frame / STARS.length)]}>{STARS[frame % STARS.length]} </Text>
         {segments.map((s, i) => (
           <Text key={String(i)}>

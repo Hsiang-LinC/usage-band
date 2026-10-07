@@ -13,8 +13,8 @@ Test: `claude plugin test .`
 
 ## Appearance
 
-The band uses a Wada-inspired green / ochre / vermilion palette, with matching
-light and dark backgrounds. Labels keep the terminal's normal monospace font;
+The band uses a Wada-inspired green / ochre / vermilion palette, with light/dark
+text colours and no background fill, so the terminal background shows through. Labels keep the terminal's normal monospace font;
 percentages and countdowns are bold. Separators use a neutral colour.
 The working star cycles ochre → blue-grey → vermilion: a shape changes every
 200ms, and each colour holds for 1.2s, without opacity blinking.
