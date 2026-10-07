@@ -12,6 +12,10 @@ for (const surface of ['terminal', 'desktop'] as const) {
       expect((await ui.find({ type: 'Text', text: /^32%$/ }))?.props).toMatchObject({ bold: true })
       expect((await ui.find({ type: 'Text', text: /^ctx $/ }))?.props.bold).not.toBe(true)
       expect((await ui.find({ type: 'Text', text: /^86%$/ }))?.props).toMatchObject({ bold: true })
+      // the icon's frames differ in glyph width, so a fixed cell keeps the text after it still
+      const icon = (await ui.findAll({ type: 'Box' })).filter(box => box.props.width !== undefined)
+      expect(icon.map(box => box.props)).toMatchObject([{ width: 2, flexShrink: 0 }])
+      expect(icon[0].children).toMatchObject([{ type: 'Text', children: ['✶'] }])
       await ui.unmount()
     })
   }
@@ -161,7 +165,7 @@ test('a request that answers without usage rolls the countdown back', async ($, 
   await clock.advance(30 * 60_000)
   expect(await shows(/^cold$/)).toBe(true)
   // idle, so the icon rests on its first frame and does not animate
-  expect(await shows(/^✶ $/)).toBe(true)
+  expect(await shows(/^✶$/)).toBe(true)
   await clock.advance(1_000)
-  expect(await shows(/^✶ $/)).toBe(true)
+  expect(await shows(/^✶$/)).toBe(true)
 })

@@ -169,7 +169,10 @@ export const register: Register = on => {
     const theme = await palette($)
     return (
       <Box paddingX={1}>
-        <Text color={theme.stars[Math.floor(frame / STARS.length)]}>{STARS[frame % STARS.length]} </Text>
+        {/* the frames' glyphs differ in width where the font falls back (desktop), so a fixed cell keeps the text after still */}
+        <Box width={2} flexShrink={0}>
+          <Text color={theme.stars[Math.floor(frame / STARS.length)]}>{STARS[frame % STARS.length]}</Text>
+        </Box>
         {segments.map((s, i) => (
           <Text key={String(i)}>
             {i > 0 ? (
