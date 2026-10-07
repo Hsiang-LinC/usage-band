@@ -76,3 +76,92 @@ test('cache figures follow every main-thread request, even after the cache went 
   expect(await shows(/^cold$/)).toBe(false)
   expect(await shows(/^90%$/)).toBe(true)
 })
+
+// Answers each main-thread request once `answer` is called with its usage.
+function stepper($: Parameters<Parameters<typeof test>[1]>[0], on: Parameters<Parameters<typeof test>[1]>[1], clock: ReturnType<typeof mock.clock>) {
+  const answers: ((usage: { cacheRead: number } | null) => void)[] = []
+  let reached = 0
+  on('turn.step', async function* (_$, e) {
+    reached++
+    const usage = await new Promise<{ cacheRead: number } | null>(resolve => answers.push(resolve))
+    return {
+      turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: usage ? 'end_turn' as const : null,
+      usage: usage && { model: e.model, input_tokens: 100, output_tokens: 1, cache_read_input_tokens: usage.cacheRead, cache_creation_input_tokens: 900 - usage.cacheRead },
+    }
+  })
+  let index = 0
+  return {
+    send: async () => {
+      const stream = $.turn.step({ turnId: 't', index: index++, model: 'm', messageCount: 1 })
+      const drained = (async () => { for await (const _ of stream) { /* drain */ } })()
+      // let the request reach the answering hook, through the plugin's own
+      for (let settles = 0; reached < index; settles++) {
+        if (settles === 20) throw new Error('turn.step never reached the answering hook')
+        await clock.advance(0)
+      }
+      // wrapped: an async function returning the promise would wait for it
+      return { answered: drained }
+    },
+    answer: (usage: { cacheRead: number } | null) => answers.shift()!(usage),
+  }
+}
+
+const bandTarget = { plugin: 'usage', surface: 'terminal' as const, component: 'AbovePrompt' as const, requestId: 'send-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } }
+
+test('the countdown restarts when a request is sent, keeping the last hit until it answers', async ($, on) => {
+  const clock = mock.clock(on)
+  on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
+  const steps = stepper($, on, clock)
+  const shows = async (text: RegExp) => {
+    const ui = await $.ui.mount(bandTarget)
+    const found = (await ui.find({ type: 'Text', text })) !== undefined
+    await ui.unmount()
+    return found
+  }
+
+  let done = await steps.send()
+  steps.answer({ cacheRead: 0 })
+  await done.answered
+  await clock.advance(30 * 60_000)
+  expect(await shows(/^30m$/)).toBe(true)
+
+  done = await steps.send()
+  expect(await shows(/^60m$/)).toBe(true)
+  expect(await shows(/^0%$/)).toBe(true)
+
+  steps.answer({ cacheRead: 900 })
+  await done.answered
+  expect(await shows(/^60m$/)).toBe(true)
+  expect(await shows(/^90%$/)).toBe(true)
+})
+
+test('a request that answers without usage rolls the countdown back', async ($, on) => {
+  const clock = mock.clock(on)
+  on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
+  const steps = stepper($, on, clock)
+  const shows = async (text: RegExp) => {
+    const ui = await $.ui.mount(bandTarget)
+    const found = (await ui.find({ type: 'Text', text })) !== undefined
+    await ui.unmount()
+    return found
+  }
+
+  let done = await steps.send()
+  steps.answer({ cacheRead: 900 })
+  await done.answered
+  await clock.advance(30 * 60_000)
+
+  done = await steps.send()
+  expect(await shows(/^60m$/)).toBe(true)
+  steps.answer(null)
+  await done.answered
+  expect(await shows(/^30m$/)).toBe(true)
+  expect(await shows(/^90%$/)).toBe(true)
+
+  await clock.advance(30 * 60_000)
+  expect(await shows(/^cold$/)).toBe(true)
+  // idle, so the icon rests on its first frame and does not animate
+  expect(await shows(/^✶ $/)).toBe(true)
+  await clock.advance(1_000)
+  expect(await shows(/^✶ $/)).toBe(true)
+})

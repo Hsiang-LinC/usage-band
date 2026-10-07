@@ -7,13 +7,13 @@ export type Segment = { text: string; level: Level; group: 'session' | 'quota' }
 export type LineInput = {
   contextPercent?: number
   rateLimits: { kind: string; percentUsed: number; resetsAt?: string }[]
-  // Last counted request: its cache figures and when it was sent (ms); the
-  // cache TTL restarts when a request reads or writes it, not when it ends.
-  lastTurn?: {
-    cachedAt: number
-    input: number
-    cacheRead: number
-    cacheWrite: number
+  // Absent until a main-thread request has been sent.
+  cache?: {
+    // When the newest counted request was sent (ms): the TTL restarts when a
+    // request reads or writes the cache, not when its response ends.
+    sentAt: number
+    // Figures of the newest request that answered; absent while none has.
+    usage?: { input: number; cacheRead: number; cacheWrite: number }
   }
   now: number
 }
@@ -40,13 +40,14 @@ export function formatSegments(i: LineInput): Segment[] {
     parts.push({ text: `ctx ${pct}%${hint}`, level, group: 'session' })
   }
 
-  const t = i.lastTurn
-  if (t === undefined) {
+  const c = i.cache
+  if (c === undefined) {
     parts.push({ text: 'cache --', level: 'none', group: 'session' })
   } else {
-    const total = t.input + t.cacheRead + t.cacheWrite
-    const remaining = t.cachedAt + CACHE_TTL_MS - i.now
-    const hit = total > 0 ? ` · hit ${Math.floor((t.cacheRead / total) * 100)}%` : ''
+    const u = c.usage
+    const total = u ? u.input + u.cacheRead + u.cacheWrite : 0
+    const remaining = c.sentAt + CACHE_TTL_MS - i.now
+    const hit = u && total > 0 ? ` · hit ${Math.floor((u.cacheRead / total) * 100)}%` : ''
     if (remaining <= 0) {
       parts.push({ text: 'cache cold', level: 'bad', group: 'session' })
     } else {

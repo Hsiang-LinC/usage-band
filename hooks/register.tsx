@@ -2,13 +2,16 @@ import type { EngineInterface, Register, Timer } from 'claude-code'
 
 import { formatSegments, type Level, type LineInput } from './format'
 
-let lastTurn: LineInput['lastTurn']
+type CacheUsage = NonNullable<NonNullable<LineInput['cache']>['usage']>
+// newest main-thread request whose response reported usage
+let answered: { sentAt: number; usage: CacheUsage } | undefined
+// main-thread requests in flight, by identity (two may share a millisecond);
+// the icon grows only while this is non-empty
+const pending = new Set<{ sentAt: number }>()
 let contextPercent: number | undefined
 let rateLimits: LineInput['rateLimits'] = []
 let tick: Timer | undefined
 let poll: Timer | undefined
-// main-thread requests in flight; the icon grows only while this is > 0
-let busy = 0
 let frame = 0
 let anim: Timer | undefined
 
@@ -61,6 +64,29 @@ async function palette($: EngineInterface) {
 
 const redraw = ($: EngineInterface) => $.ui.invalidate('ui.render')
 
+// The countdown runs from the newest request sent, answered or still in
+// flight; the hit rate is the newest answered one's.
+function cacheState(): LineInput['cache'] {
+  let sentAt = answered?.sentAt
+  for (const request of pending) {
+    if (sentAt === undefined || request.sentAt > sentAt) sentAt = request.sentAt
+  }
+  return sentAt === undefined ? undefined : { sentAt, usage: answered?.usage }
+}
+
+// A minute ticker phased on the countdown's start, so the band redraws
+// exactly when a whole minute crosses.
+function phaseTicker($: EngineInterface, now: number) {
+  tick?.cancel()
+  tick = undefined
+  const cache = cacheState()
+  if (cache === undefined) return
+  tick = $.clock.after(60_000 - ((now - cache.sentAt) % 60_000), () => {
+    redraw($)
+    tick = $.clock.every(60_000, () => redraw($))
+  })
+}
+
 async function refreshUsage($: EngineInterface) {
   const u = await $.session.usage()
   contextPercent = u.context.percent
@@ -87,38 +113,44 @@ export const register: Register = on => {
   // per request, not per turn: a turn's usage sums every request of its tool
   // loop, and only the latest request says how warm the cache is now
   on('turn.step', async function* ($, e, next) {
-    const sentAt = await $.clock.now()
-    const isMain = e.agentId === undefined
-    // a minute ticker phased on this request: it restarts the cache TTL, so
-    // the countdown changes exactly when a whole minute crosses
-    if (isMain) {
-      tick?.cancel()
-      tick = $.clock.every(60_000, () => redraw($))
-    }
-    if (isMain && ++busy === 1) {
+    // sub-agents send other prefixes; they neither read nor refresh this cache
+    if (e.agentId !== undefined) return yield* next(e)
+    const request = { sentAt: await $.clock.now() }
+    // the TTL restarts as the request is sent, so count down from now at once,
+    // keeping the last answered hit rate until this response reports its own
+    pending.add(request)
+    phaseTicker($, request.sentAt)
+    if (pending.size === 1) {
       frame = 0
       anim = $.clock.every(ANIM_MS, () => {
         frame = (frame + 1) % FRAME_COUNT
         redraw($)
       })
     }
+    redraw($)
     try {
       const r = yield* next(e)
-      if (r.usage && isMain) {
-        lastTurn = {
-          cachedAt: sentAt,
-          input: r.usage.input_tokens,
-          cacheRead: r.usage.cache_read_input_tokens,
-          cacheWrite: r.usage.cache_creation_input_tokens,
+      if (r.usage && (answered === undefined || request.sentAt >= answered.sentAt)) {
+        answered = {
+          sentAt: request.sentAt,
+          usage: {
+            input: r.usage.input_tokens,
+            cacheRead: r.usage.cache_read_input_tokens,
+            cacheWrite: r.usage.cache_creation_input_tokens,
+          },
         }
       }
       return r
     } finally {
-      if (isMain && --busy === 0) {
+      // a request that failed or was cut off without usage confirms nothing
+      // about the cache: dropping it rolls the countdown back
+      pending.delete(request)
+      if (pending.size === 0) {
         anim?.cancel()
         anim = undefined
         frame = 0
       }
+      phaseTicker($, await $.clock.now())
       redraw($)
     }
   })
@@ -128,7 +160,7 @@ export const register: Register = on => {
     const segments = formatSegments({
       contextPercent,
       rateLimits,
-      lastTurn,
+      cache: cacheState(),
       now: await $.clock.now(),
     })
     if (segments.length === 0) return next(e)

@@ -9,7 +9,7 @@ test('formats ctx, cache, hit and quota used', () => {
       { kind: 'five_hour', percentUsed: 20.5 },
       { kind: 'seven_day', percentUsed: 70 },
     ],
-    lastTurn: { cachedAt: 0, input: 100, cacheRead: 900, cacheWrite: 0 },
+    cache: { sentAt: 0, usage: { input: 100, cacheRead: 900, cacheWrite: 0 } },
     now: 60_000,
   })
   expect(line).toBe('ctx 42% · cache 59m · hit 90% · 5h 20% · 7d 70%')
@@ -19,21 +19,25 @@ test('cache goes cold after the TTL and absent data is skipped', () => {
   expect(
     formatLine({
       rateLimits: [],
-      lastTurn: { cachedAt: 0, input: 0, cacheRead: 0, cacheWrite: 0 },
+      cache: { sentAt: 0, usage: { input: 0, cacheRead: 0, cacheWrite: 0 } },
       now: 3_700_000,
     }),
   ).toBe('cache cold')
 })
 
-test('shows a placeholder before any turn has completed', () => {
+test('shows a placeholder before any request has been sent', () => {
   expect(formatLine({ rateLimits: [], now: 0 })).toBe('cache --')
+})
+
+test('counts down without a hit rate until the first request answers', () => {
+  expect(formatLine({ rateLimits: [], cache: { sentAt: 0 }, now: 0 })).toBe('cache 60m')
 })
 
 test('levels follow usage and remaining cache time', () => {
   const seg = (now: number, five: number) =>
     formatSegments({
       rateLimits: [{ kind: 'five_hour', percentUsed: five }],
-      lastTurn: { cachedAt: 0, input: 0, cacheRead: 0, cacheWrite: 0 },
+      cache: { sentAt: 0, usage: { input: 0, cacheRead: 0, cacheWrite: 0 } },
       now,
     })
   expect(seg(0, 10).map(s => s.level)).toEqual(['ok', 'ok'])
@@ -71,7 +75,7 @@ test('a cold cache drops the hit rate, since nothing is cached to hit', () => {
   expect(
     formatLine({
       rateLimits: [],
-      lastTurn: { cachedAt: 0, input: 100, cacheRead: 900, cacheWrite: 0 },
+      cache: { sentAt: 0, usage: { input: 100, cacheRead: 900, cacheWrite: 0 } },
       now: 3_700_000,
     }),
   ).toBe('cache cold')
@@ -93,7 +97,7 @@ test('ctx and cache are the session group, 5h and 7d the quota group', () => {
 test('hit disappears exactly when the cache expires, without a trailing separator', () => {
   const at = (now: number) => formatSegments({
     rateLimits: [],
-    lastTurn: { cachedAt: 0, input: 100, cacheRead: 900, cacheWrite: 0 },
+    cache: { sentAt: 0, usage: { input: 100, cacheRead: 900, cacheWrite: 0 } },
     now,
   })[0].text
   expect(at(3_599_999)).toBe('cache <1m · hit 90%')
