@@ -1,9 +1,20 @@
 import { expect, test, mock } from 'claude-code/testing'
+import type { On } from 'claude-code'
+
+// What lies beneath this mod's hook: the engine's band, or another mod's row.
+function engineBand(on: On, text?: string) {
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e) => {
+    const { Box, Text } = $.ui.resolve(e)
+
+    return text === undefined ? Box({ key: 'engine' }) : Text({ key: 'engine', children: [text] })
+  })
+}
 
 for (const surface of ['terminal', 'desktop'] as const) {
   for (const theme of ['light', 'dark'] as const) {
     test(`${surface}: ${theme} palette and only values are bold`, async ($, on) => {
       mock.clock(on)
+      engineBand(on)
       on('session.measure', () => ({ changed: [] }))
       on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: theme, provider: { kind: 'engine' }, isLocked: false }] }))
       await $.session.measure({ context: { percent: 32 }, rateLimits: [{ kind: 'five_hour', percentUsed: 86 }] })
@@ -24,15 +35,16 @@ for (const surface of ['terminal', 'desktop'] as const) {
 for (const surface of ['terminal', 'desktop'] as const) {
   test(`${surface}: the segments are one inline run beside the icon`, async ($, on) => {
     mock.clock(on)
+    engineBand(on)
     on('session.measure', () => ({ changed: [] }))
     on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
     await $.session.measure({ context: { percent: 32 }, rateLimits: [{ kind: 'five_hour', percentUsed: 86 }] })
     const ui = await $.ui.mount({ plugin: 'usage', surface, component: 'AbovePrompt', requestId: 'run-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
     // the desktop draws Box as a flex row and trims the whitespace at each
     // flex item's edges, so separators must sit inside one Text, not between
-    const root = await ui.drawn()
-    expect(root.type).toBe('Box')
-    expect(root.children).toMatchObject([{ type: 'Box', props: { width: 2 } }, { type: 'Text' }])
+    const [row] = (await ui.drawn()).children as [{ type: string; children: unknown[] }]
+    expect(row.type).toBe('Box')
+    expect(row.children).toMatchObject([{ type: 'Box', props: { width: 2 } }, { type: 'Text' }])
     const run = (await ui.findAll({ type: 'Text' })).find(text => /^ctx /.test(text.text))
     expect(run?.text).toBe('ctx 32% · cache -- │ 5h 86%')
     await ui.unmount()
@@ -42,6 +54,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
 for (const appearance of ['light', 'dark'] as const) {
   test(`auto uses macOS ${appearance} appearance and caches detection`, async ($, on) => {
     const clock = mock.clock(on)
+    engineBand(on)
     on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'auto', provider: { kind: 'engine' }, isLocked: false }] }))
     let reads = 0
     on('process.run', () => {
@@ -67,6 +80,7 @@ for (const appearance of ['light', 'dark'] as const) {
 
 test('cache figures follow every main-thread request, even after the cache went cold', async ($, on) => {
   const clock = mock.clock(on)
+  engineBand(on)
   on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
   let cacheRead = 0
   on('turn.step', async function* (_$, e) {
@@ -132,6 +146,7 @@ const bandTarget = { plugin: 'usage', surface: 'terminal' as const, component: '
 
 test('the countdown restarts when a request is sent, keeping the last hit until it answers', async ($, on) => {
   const clock = mock.clock(on)
+  engineBand(on)
   on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
   const steps = stepper($, on, clock)
   const shows = async (text: RegExp) => {
@@ -159,6 +174,7 @@ test('the countdown restarts when a request is sent, keeping the last hit until 
 
 test('a request that answers without usage rolls the countdown back', async ($, on) => {
   const clock = mock.clock(on)
+  engineBand(on)
   on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
   const steps = stepper($, on, clock)
   const shows = async (text: RegExp) => {
@@ -190,6 +206,7 @@ test('a request that answers without usage rolls the countdown back', async ($, 
 
 test('the icon animates while a request runs and rests once it ends, though the cache is warm', async ($, on) => {
   const clock = mock.clock(on)
+  engineBand(on)
   on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
   const steps = stepper($, on, clock)
   const shows = async (text: RegExp) => {
@@ -209,4 +226,19 @@ test('the icon animates while a request runs and rests once it ends, though the 
   await clock.advance(200)
   expect(await shows(/^59m$/)).toBe(true)
   expect(await shows(/^✶$/)).toBe(true)
+})
+
+// Other mods share the band (vault-jot adds its row), so the usage row goes
+// on top of what lies beneath, never in its place.
+test('keeps the drawing beneath under the usage row', async ($, on) => {
+  mock.clock(on)
+  engineBand(on, 'another mod')
+  on('session.measure', () => ({ changed: [] }))
+  on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
+  await $.session.measure({ context: { percent: 32 }, rateLimits: [] })
+  const ui = await $.ui.mount({ plugin: 'usage', surface: 'desktop', component: 'AbovePrompt', requestId: 'shared-band', props: { hasSurvey: false, isWorking: false, maxRows: 2, bodyColumns: 120, scroll: { offset: 0, bodyRows: 2 }, view: {} } })
+  const root = await ui.drawn()
+  expect(root.props).toMatchObject({ flexDirection: 'column' })
+  expect(root.children).toMatchObject([{ type: 'Box' }, { type: 'Text', children: ['another mod'] }])
+  await ui.unmount()
 })
