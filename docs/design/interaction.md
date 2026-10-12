@@ -45,7 +45,7 @@ Layout consequences found while building:
 
 ### 3. Keep-warm button
 
-- Shown whenever the cache is **warm** and the session idle (first drawn only in the last 10 minutes; always-on was preferred after trying it). The cache segment's colour is what warns as the end nears. When cold, `fork` would re-bill the whole prefix as a write, which is the opposite of the intent; no button.
+- The sign `♨︎` (U+2668 with U+FE0E, text presentation) is **always drawn** next to the cache segment, in a fixed 2-cell box, so the band never shifts. It is a live Button only for a warm cache and an idle session; otherwise the same glyph, dim and inert. The cache segment's colour is what warns as the end nears. When cold, `fork` would re-bill the whole prefix as a write, which is the opposite of the intent; no button.
 - Press → `$.model.fork({ prompt: <minimal> })`; discard the reply. Guard: ignore while one is in flight and within 30 s of the last press (bounded; prevents double-press spend).
 - On success set `warmedAt = now`. The countdown runs from `max(newest pending/answered send, warmedAt)`. A fork does not produce a main-thread `turn.step`, so without this the band would not reset.
 - Failure (`api-error`, `nothing-to-fork`, `aborted`) → toast the reason, leave the countdown untouched.
@@ -57,7 +57,7 @@ Layout consequences found while building:
 
 A used-% / time-to-reset toggle added nothing: 5h already shows both. What the API does not give is *whether the burn will last*. From the window length (5h, 7d), `resetsAt` and the used share:
 
-- `pace = used share / elapsed share` of the window; 1 is an even burn. It is shown as one arrow in the place of the old `↻` reset sign: `↓` < 0.5, `↘` < 0.75, `→` ≤ 1.25, `↗` < 2, `↑` beyond.
+- `pace = used share / elapsed share` of the window; 1 is an even burn. It is shown as one sign in the place of the old `↻` reset sign: `▾` below 0.75, `▴` above 1.25, `~` between (not `·`, which already separates segments). Five arrows and a speedometer-needle idea were tried and dropped: the three small signs are narrower and clearer.
 - `fullIn = (1 − used) / (used / elapsed)`; shown as `full in 1h00m` only when it comes **before the reset**. It lifts an `ok` level to `warn`.
 - Nothing is shown until 10% of the window has passed (`MIN_ELAPSED`): earlier, the rate is noise. 5h then keeps `↻`; 7d shows its share only.
 - A press-for-detail toast (an `info` button for hit / 5h / 7d) was built and removed: the band already says what the toast repeated.

@@ -14,17 +14,15 @@ Test: `claude plugin test .`
 ## Pace
 
 5h and 7d compare the share used with the share of the window that has passed
-(from `resetsAt`) and show it as an arrow where the reset sign used to be:
+(from `resetsAt`) and show it as a sign where the reset sign used to be:
 
-| arrow | burn, against an even one |
+| sign | burn, against an even one |
 |---|---|
-| `↓` | under half |
-| `↘` | under three quarters |
-| `→` | about even |
-| `↗` | up to twice |
-| `↑` | twice or more |
+| `▾` | under three quarters |
+| `~` | about even |
+| `▴` | over a quarter faster |
 
-`5h 50% ↗ 2h10m` reads: half used, burning faster than even, 2h10m to reset. When
+`5h 50% ▴ 2h10m` reads: half used, burning faster than even, 2h10m to reset. When
 the burn so far would reach 100% before the reset, `full in 1h00m` says when and
 a low share turns yellow. Until a tenth of the window has passed there is no
 pace: 5h shows the plain `↻` reset sign and 7d shows only its share.
@@ -38,13 +36,14 @@ beside them as buttons:
 - `ctx 45% → compact`: from 30% context, while no request is running. It runs
   `/compact`; a refused or vetoed compact is shown as a toast. The cache then
   starts over (`cache --`), since the prefix has changed.
-- `cache 52m → warm`: sends one tiny request over the session's own prefix
-  (`$.model.fork`), which reads the cached prefix and restarts the 1h TTL; a
-  toast says how many tokens the cache served. Not offered while a request runs,
-  for 30s after a press, or once the cache is cold (that request would write the
-  whole prefix again). It is a real request: on a subscription it counts against
-  the quota. The cache segment turns yellow in the last 5 minutes and red when
-  cold, as always.
+- `cache 52m ♨︎`: the sign is always there, so the band does not shift. Pressed,
+  it sends one tiny request over the session's own prefix (`$.model.fork`),
+  which reads the cached prefix and restarts the 1h TTL; a toast says how many
+  tokens the cache served. It is dim and inert while a request runs, for 30s
+  after a press, before the first request and once the cache is cold (that
+  request would write the whole prefix again). It is a real request: on a
+  subscription it counts against the quota. The cache segment turns yellow in
+  the last 5 minutes and red when cold, as always.
 
 Click where the terminal reports clicks (not with `CLAUDE_CODE_DISABLE_MOUSE_CLICKS`),
 or press `ctrl+x` then `Tab` to focus the band, move with the arrows and press Enter.
