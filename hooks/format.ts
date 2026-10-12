@@ -2,19 +2,18 @@ export const CACHE_TTL_MS = 60 * 60 * 1000
 
 export type Level = 'ok' | 'warn' | 'bad' | 'none'
 // session: ctx and cache; quota: 5h and 7d. The band separates the two groups.
-// Pressable when it has either: `detail` is shown on press, `action` is run.
+// `detail` is what the band's info button shows for this segment; `action` is a
+// button drawn after the segment (a Button cannot carry the segment's colours).
 export type Segment = {
   text: string
   level: Level
   group: 'session' | 'quota'
   detail?: string
-  action?: 'compact' | 'warm'
+  action?: { kind: 'compact' | 'warm'; label: string }
 }
 
 // From this context share on, an idle session is offered the compact button.
 export const COMPACT_FROM = 30
-// Within this long of expiring, a warm cache is offered a keep-warm press.
-export const WARM_WITHIN_MS = 10 * 60_000
 
 type Usage = { input: number; cacheRead: number; cacheWrite: number }
 
@@ -94,8 +93,8 @@ export function formatSegments(i: LineInput): Segment[] {
     const pct = Math.floor(i.contextPercent)
     const level = byUsed(pct)
     if (i.canCompact && pct >= COMPACT_FROM) {
-      const handOff = level === 'bad' ? ' or hand off' : ''
-      parts.push({ text: `ctx ${pct}% → compact${handOff}`, level, group: 'session', action: 'compact' })
+      const label = level === 'bad' ? '→ compact or hand off' : '→ compact'
+      parts.push({ text: `ctx ${pct}%`, level, group: 'session', action: { kind: 'compact', label } })
     } else {
       const hint = level === 'bad' ? ' → /compact or hand off' : ''
       parts.push({ text: `ctx ${pct}%${hint}`, level, group: 'session' })
@@ -113,11 +112,12 @@ export function formatSegments(i: LineInput): Segment[] {
       const text =
         remaining < 60_000 ? 'cache <1m' : `cache ${Math.floor(remaining / 60_000)}m`
       const level: Level = remaining > 5 * 60_000 ? 'ok' : 'warn'
-      if (i.canWarm && remaining <= WARM_WITHIN_MS) {
-        parts.push({ text: `${text} → warm`, level, group: 'session', action: 'warm' })
-      } else {
-        parts.push({ text, level, group: 'session' })
-      }
+      parts.push({
+        text,
+        level,
+        group: 'session',
+        action: i.canWarm ? { kind: 'warm', label: '→ warm' } : undefined,
+      })
       const hit = hitPercent(c.usage)
       if (hit !== undefined && c.usage) {
         const u = c.usage

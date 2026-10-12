@@ -179,31 +179,28 @@ test('only quota and hit are pressable', () => {
 test('the compact button appears from 30% context, only while idle', () => {
   const ctx = (contextPercent: number, canCompact?: boolean) =>
     formatSegments({ contextPercent, rateLimits: [], canCompact, now: 0 })[0]
-  expect(ctx(29, true)).toMatchObject({ text: 'ctx 29%' })
+  expect(ctx(29, true).text).toBe('ctx 29%')
   expect(ctx(29, true).action).toBeUndefined()
-  expect(ctx(30, true)).toMatchObject({ text: 'ctx 30% → compact', action: 'compact', level: 'ok' })
-  expect(ctx(85, true)).toMatchObject({ text: 'ctx 85% → compact or hand off', action: 'compact', level: 'bad' })
+  // the segment keeps its text and colour; the button is drawn after it
+  expect(ctx(30, true)).toMatchObject({ text: 'ctx 30%', level: 'ok', action: { kind: 'compact', label: '→ compact' } })
+  expect(ctx(85, true)).toMatchObject({ text: 'ctx 85%', level: 'bad', action: { kind: 'compact', label: '→ compact or hand off' } })
   // a request in flight: /compact would be refused, so the plain text stays
-  expect(ctx(50, false)).toMatchObject({ text: 'ctx 50%' })
   expect(ctx(50, false).action).toBeUndefined()
   expect(ctx(85, false).text).toBe('ctx 85% → /compact or hand off')
 })
 
-test('keep-warm is offered only in the last ten minutes of a warm cache', () => {
+test('keep-warm is offered whenever a warm cache can take a request', () => {
   const cache = (minutesLeft: number, canWarm?: boolean) =>
-    formatSegments({
-      rateLimits: [],
-      cache: { sentAt: 0 },
-      canWarm,
-      now: (60 - minutesLeft) * 60_000,
-    })[0]
-  expect(cache(10, true)).toMatchObject({ text: 'cache 10m → warm', action: 'warm', level: 'ok' })
-  expect(cache(0.5, true)).toMatchObject({ text: 'cache <1m → warm', action: 'warm' })
-  expect(cache(11, true)).toMatchObject({ text: 'cache 11m' })
-  expect(cache(11, true).action).toBeUndefined()
+    formatSegments({ rateLimits: [], cache: { sentAt: 0 }, canWarm, now: (60 - minutesLeft) * 60_000 })[0]
+  const warm = { kind: 'warm', label: '→ warm' }
+  expect(cache(59, true)).toMatchObject({ text: 'cache 59m', level: 'ok', action: warm })
+  // the colour of the cache segment is what turns as the end nears
+  expect(cache(5, true)).toMatchObject({ text: 'cache 5m', level: 'warn', action: warm })
+  expect(cache(0.5, true)).toMatchObject({ text: 'cache <1m', level: 'warn', action: warm })
   // a request in flight or one just sent: no second one
-  expect(cache(5, false).text).toBe('cache 5m')
-  expect(cache(5).action).toBeUndefined()
+  expect(cache(30, false).action).toBeUndefined()
+  expect(cache(30).action).toBeUndefined()
   // a cold cache is not warmed: the request would write the whole prefix again
   expect(formatSegments({ rateLimits: [], cache: { sentAt: 0 }, canWarm: true, now: 61 * 60_000 })[0]).toMatchObject({ text: 'cache cold' })
+  expect(formatSegments({ rateLimits: [], cache: { sentAt: 0 }, canWarm: true, now: 61 * 60_000 })[0].action).toBeUndefined()
 })

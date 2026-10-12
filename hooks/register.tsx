@@ -73,6 +73,10 @@ async function palette($: EngineInterface) {
 
 const redraw = ($: EngineInterface) => $.ui.invalidate('ui.render')
 
+function press($: EngineInterface, kind: 'compact' | 'warm') {
+  return kind === 'compact' ? compact($) : warm($)
+}
+
 // The same call /compact makes. It is refused while a request runs (the band
 // offers it only when idle, but the press can land just after one starts);
 // either way the person is told, and nothing is retried.
@@ -228,6 +232,8 @@ export const register: Register = on => {
       now,
     })
     if (segments.length === 0) return next(e)
+    // the info button shows every segment's detail at once
+    const details = segments.flatMap(s => (s.detail === undefined ? [] : [s.detail])).join('\n')
 
     // other mods share the band (vault-jot adds its row), so draw on top of
     // what lies beneath rather than in its place
@@ -243,15 +249,6 @@ export const register: Register = on => {
         ))}
       </Text>
     )
-    // A Button draws its Text children itself, so the colour sits on each of
-    // them: a Text nested inside a Text loses it there. Spaces stay out of the
-    // Text children, as strings, so no Text begins or ends with whitespace.
-    const buttonParts = (s: (typeof segments)[number]) =>
-      s.text.split(/(<?\d+(?:[dh]\d+)?[dhm%])|( )/).filter(text => text !== undefined && text !== '').map((text, j) =>
-        text === ' ' ? ' ' : (
-          <Text key={String(j)} color={theme.colors[s.level]} bold={/^<?\d+(?:[dh]\d+)?[dhm%]$/.test(text)}>{text}</Text>
-        ),
-      )
     return (
       <Box flexDirection="column">
         <Box paddingX={1}>
@@ -267,12 +264,16 @@ export const register: Register = on => {
               ...(i > 0
                 ? [<Text key={`sep-${i}`} color={theme.neutral}>{segments[i - 1].group === s.group ? '·' : '│'}</Text>]
                 : []),
-              s.detail === undefined && s.action === undefined ? (
-                <Box key={`seg-${i}`}>{body(s)}</Box>
-              ) : (
-                <Button key={`seg-${i}`} plain onPress={() => (s.action === 'compact' ? compact($) : s.action === 'warm' ? warm($) : $.ui.toast(s.detail!))}>{buttonParts(s)}</Button>
-              ),
+              <Box key={`seg-${i}`} gap={1}>
+                {body(s)}
+                {s.action === undefined ? null : (
+                  <Button key={s.action.kind} plain onPress={() => press($, s.action!.kind)}>{s.action.label}</Button>
+                )}
+              </Box>,
             ])}
+            {details === '' ? null : (
+              <Button key="info" plain dimColor onPress={() => $.ui.toast(details)}>info</Button>
+            )}
           </Box>
         </Box>
         {beneath}

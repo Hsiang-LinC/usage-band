@@ -53,7 +53,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
   })
 }
 
-test('pressing the 5h segment toasts its detail', async ($, on) => {
+test('pressing info toasts the 5h detail', async ($, on) => {
   mock.clock(on)
   engineBand(on)
   const toasts: string[] = []
@@ -62,7 +62,7 @@ test('pressing the 5h segment toasts its detail', async ($, on) => {
   on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
   await $.session.measure({ context: { percent: 32 }, rateLimits: [{ kind: 'five_hour', percentUsed: 86 }] })
   const ui = await $.ui.mount({ plugin: 'usage', surface: 'terminal', component: 'AbovePrompt', requestId: 'press-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
-  await ui.press({ plugin: 'usage', key: 'seg-2' })
+  await ui.press({ plugin: 'usage', key: 'info' })
   expect(toasts).toEqual(['5h 86% used'])
   await ui.unmount()
 })
@@ -259,7 +259,7 @@ test('keeps the drawing beneath under the usage row', async ($, on) => {
   await ui.unmount()
 })
 
-test('pressing hit toasts the newest request and the session', async ($, on) => {
+test('pressing info toasts the hit detail: the newest request and the session', async ($, on) => {
   mock.clock(on)
   engineBand(on)
   const toasts: string[] = []
@@ -277,7 +277,7 @@ test('pressing hit toasts the newest request and the session', async ($, on) => 
     for await (const _ of $.turn.step({ turnId: 't', index, model: 'm', messageCount: 1 })) { /* drain */ }
   }
   const ui = await $.ui.mount({ plugin: 'usage', surface: 'terminal', component: 'AbovePrompt', requestId: 'hit-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
-  await ui.press({ plugin: 'usage', key: 'seg-1' })
+  await ui.press({ plugin: 'usage', key: 'info' })
   // the session: (0 + 900) cache reads of (1000 + 1000) input tokens
   expect(toasts).toEqual(['hit 90% on the newest request (read 900 · written 0 · uncached 100 tokens) · 45% across the session'])
   await ui.unmount()
@@ -304,7 +304,10 @@ test('pressing compact runs /compact once and says nothing when it succeeds', as
   on('session.measure', () => ({ changed: [] }))
   const { ui, toasts, compactions } = await compactBand($, on, () => ({ messages: [{ role: 'user', text: 'summary', toolUses: [] }] }))
   expect(await ui.find({ type: 'Button', text: /compact/ })).toBeDefined()
-  await ui.press({ plugin: 'usage', key: 'seg-0' })
+  // a Button is drawn in the surface's own style, so the segment's colour must
+  // stay on the Text beside it
+  expect((await ui.findAll({ type: 'Text' })).some(text => text.props.color === '#82B58B' && /^ctx/.test(text.text))).toBe(true)
+  await ui.press({ plugin: 'usage', key: 'compact' })
   expect(compactions()).toBe(1)
   expect(toasts).toEqual([])
   await ui.unmount()
@@ -313,7 +316,7 @@ test('pressing compact runs /compact once and says nothing when it succeeds', as
 test('a vetoed or refused compact tells the person why', async ($, on) => {
   on('session.measure', () => ({ changed: [] }))
   const { ui, toasts } = await compactBand($, on, () => ({ skip: 'blocked by a hook' }))
-  await ui.press({ plugin: 'usage', key: 'seg-0' })
+  await ui.press({ plugin: 'usage', key: 'compact' })
   expect(toasts).toEqual(['compact skipped: blocked by a hook'])
   await ui.unmount()
 })
@@ -369,7 +372,7 @@ const answered = (read: number, written: number) => ({
 test('pressing keep-warm restarts the countdown and reports what the cache served', async ($, on) => {
   const { ui, toasts, forks } = await warmBand($, on, () => answered(45_000, 0), 52)
   expect(await ui.find({ type: 'Text', text: /^8m$/ })).toBeDefined()
-  await ui.press({ plugin: 'usage', key: 'seg-0' })
+  await ui.press({ plugin: 'usage', key: 'warm' })
   expect(forks()).toBe(1)
   expect(toasts).toEqual(['cache kept warm (45000 tokens read)'])
   expect(await ui.find({ type: 'Text', text: /^(59|60)m$/ })).toBeDefined()
@@ -378,14 +381,14 @@ test('pressing keep-warm restarts the countdown and reports what the cache serve
 
 test('a lapsed cache is said to have been written again', async ($, on) => {
   const { ui, toasts } = await warmBand($, on, () => answered(0, 45_000), 52)
-  await ui.press({ plugin: 'usage', key: 'seg-0' })
+  await ui.press({ plugin: 'usage', key: 'warm' })
   expect(toasts).toEqual(['cache had lapsed: 45000 tokens written again'])
   await ui.unmount()
 })
 
 test('a failed keep-warm is toasted and leaves the countdown alone', async ($, on) => {
   const { ui, toasts } = await warmBand($, on, () => ({ isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: {} }), 52)
-  await ui.press({ plugin: 'usage', key: 'seg-0' })
+  await ui.press({ plugin: 'usage', key: 'warm' })
   expect(toasts).toEqual(['keep-warm failed: api-error'])
   expect(await ui.find({ type: 'Text', text: /^8m$/ })).toBeDefined()
   await ui.unmount()
@@ -393,12 +396,17 @@ test('a failed keep-warm is toasted and leaves the countdown alone', async ($, o
 
 test('the keep-warm button waits out a cooldown after a press', async ($, on) => {
   const { ui, forks, clock } = await warmBand($, on, () => answered(45_000, 0), 52)
-  await ui.press({ plugin: 'usage', key: 'seg-0' })
+  await ui.press({ plugin: 'usage', key: 'warm' })
   expect(await ui.find({ type: 'Button', text: /warm/ })).toBeUndefined()
-  // the countdown restarted, so nothing to offer until it nears the end again
-  await clock.advance(51 * 60_000)
+  await clock.advance(31_000)
   expect(await ui.find({ type: 'Button', text: /warm/ })).toBeDefined()
-  await ui.press({ plugin: 'usage', key: 'seg-0' })
+  await ui.press({ plugin: 'usage', key: 'warm' })
   expect(forks()).toBe(2)
+  await ui.unmount()
+})
+
+test('the keep-warm button is there from the first minute, not only near the end', async ($, on) => {
+  const { ui } = await warmBand($, on, () => answered(45_000, 0), 1)
+  expect(await ui.find({ type: 'Button', text: /warm/ })).toBeDefined()
   await ui.unmount()
 })
