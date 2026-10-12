@@ -3,16 +3,19 @@ export const CACHE_TTL_MS = 60 * 60 * 1000
 export type Level = 'ok' | 'warn' | 'bad' | 'none'
 // session: ctx and cache; quota: 5h and 7d. The band separates the two groups.
 // `action` is a button drawn after the segment (a Button cannot carry the
-// segment's colours).
+// segment's colours). A disabled action keeps its place, drawn dim and inert,
+// so the band does not shift when the action comes and goes.
 export type Segment = {
   text: string
   level: Level
   group: 'session' | 'quota'
-  action?: { kind: 'compact' | 'warm'; label: string }
+  action?: { kind: 'compact' | 'warm'; label: string; isEnabled: boolean }
 }
 
 // From this context share on, an idle session is offered the compact button.
 export const COMPACT_FROM = 30
+// Hot-spring sign, text presentation (U+FE0E) so it takes the band's colours.
+export const WARM_SIGN = '♨\uFE0E'
 
 type Usage = { input: number; cacheRead: number; cacheWrite: number }
 
@@ -59,15 +62,11 @@ const hitPercent = (u: Usage | undefined): number | undefined => {
 const WINDOW_MS = { five_hour: 5 * 3_600_000, seven_day: 7 * 86_400_000 } as const
 // Too little of a window has passed for its burn rate to say anything.
 const MIN_ELAPSED = 0.1
-// Pace ratio (1 is an even burn) to the arrow that shows it, slowest first.
-const PACE_ARROWS = [
-  [0.5, '↓'],
-  [0.75, '↘'],
-  [1.25, '→'],
-  [2, '↗'],
-  [Infinity, '↑'],
-] as const
-const paceArrow = (ratio: number) => PACE_ARROWS.find(([below]) => ratio < below || below === Infinity)![1]
+// Pace ratio (1 is an even burn) under SLOW or over FAST is marked; between,
+// the plain sign. `~` rather than `·`, which already separates segments.
+const SLOW = 0.75
+const FAST = 1.25
+const paceSign = (ratio: number) => (ratio < SLOW ? '▾' : ratio > FAST ? '▴' : '~')
 
 type Pace = {
   // used share over elapsed share of the window: 1 is an even burn
@@ -98,7 +97,7 @@ export function formatSegments(i: LineInput): Segment[] {
     const level = byUsed(pct)
     if (i.canCompact && pct >= COMPACT_FROM) {
       const label = level === 'bad' ? '→ compact or hand off' : '→ compact'
-      parts.push({ text: `ctx ${pct}%`, level, group: 'session', action: { kind: 'compact', label } })
+      parts.push({ text: `ctx ${pct}%`, level, group: 'session', action: { kind: 'compact', label, isEnabled: true } })
     } else {
       const hint = level === 'bad' ? ' → /compact or hand off' : ''
       parts.push({ text: `ctx ${pct}%${hint}`, level, group: 'session' })
@@ -106,12 +105,14 @@ export function formatSegments(i: LineInput): Segment[] {
   }
 
   const c = i.cache
+  // always drawn: only a warm cache with an idle session can take the request
+  const warm = (isEnabled: boolean) => ({ kind: 'warm' as const, label: WARM_SIGN, isEnabled })
   if (c === undefined) {
-    parts.push({ text: 'cache --', level: 'none', group: 'session' })
+    parts.push({ text: 'cache --', level: 'none', group: 'session', action: warm(false) })
   } else {
     const remaining = c.sentAt + CACHE_TTL_MS - i.now
     if (remaining <= 0) {
-      parts.push({ text: 'cache cold', level: 'bad', group: 'session' })
+      parts.push({ text: 'cache cold', level: 'bad', group: 'session', action: warm(false) })
     } else {
       const text =
         remaining < 60_000 ? 'cache <1m' : `cache ${Math.floor(remaining / 60_000)}m`
@@ -120,7 +121,7 @@ export function formatSegments(i: LineInput): Segment[] {
         text,
         level,
         group: 'session',
-        action: i.canWarm ? { kind: 'warm', label: '→ warm' } : undefined,
+        action: warm(i.canWarm === true),
       })
       const hit = hitPercent(c.usage)
       if (hit !== undefined) parts.push({ text: `hit ${hit}%`, level, group: 'session' })
@@ -136,9 +137,9 @@ export function formatSegments(i: LineInput): Segment[] {
       const pct = Math.floor(w.percentUsed)
       const reset = untilReset(w.resetsAt, i.now)
       const p = pace(kind, w.percentUsed, w.resetsAt, i.now)
-      // the arrow says how fast the window is being used; with no pace yet the
+      // the sign says how fast the window is being used; with no pace yet the
       // 5h window keeps the plain reset sign, and 7d shows nothing
-      const sign = p !== undefined ? paceArrow(p.ratio) : kind === 'five_hour' && reset ? '↻' : ''
+      const sign = p !== undefined ? paceSign(p.ratio) : kind === 'five_hour' && reset ? '↻' : ''
       const base = byUsed(pct)
       parts.push({
         text: [

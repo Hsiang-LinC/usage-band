@@ -65,8 +65,8 @@ test('5h shows time to reset; past or missing reset is omitted', () => {
       now,
     })
   const t = (ms: number) => new Date(ms).toISOString()
-  // (the arrow is covered below; here only the reset time matters)
-  expect(at(t(2 * 3_600_000 + 13 * 60_000))).toContain('5h 10% ↓ 2h13m')
+  // (the sign is covered below; here only the reset time matters)
+  expect(at(t(2 * 3_600_000 + 13 * 60_000))).toContain('5h 10% ▾ 2h13m')
   expect(at(t(45 * 60_000))).toContain(' 45m')
   expect(at(t(1_000), 5_000)).toBe('cache -- · 5h 10%')
   expect(at(undefined)).toBe('cache -- · 5h 10%')
@@ -115,19 +115,21 @@ const five = (pct: number, elapsed: number) => ({
   now: 0,
 })
 
-test('the arrow shows how fast the window is being used, from slowest to fastest', () => {
+test('the sign shows how fast the window is being used: slow, even or fast', () => {
   // an even burn is 50% used halfway through the 5h window
-  const arrow = (pct: number, elapsed: number) => formatLine(five(pct, elapsed)).replace(/^cache -- · 5h \d+% (\S).*$/, '$1')
-  expect(arrow(10, 2.5 * HOUR)).toBe('↓') // 0.2x
-  expect(arrow(30, 2.5 * HOUR)).toBe('↘') // 0.6x
-  expect(arrow(50, 2.5 * HOUR)).toBe('→') // 1x
-  expect(arrow(70, 2.5 * HOUR)).toBe('↗') // 1.4x
-  expect(arrow(50, HOUR)).toBe('↑') // 2.5x
+  const sign = (pct: number, elapsed: number) => formatLine(five(pct, elapsed)).replace(/^cache -- · 5h \d+% (\S).*$/, '$1')
+  expect(sign(10, 2.5 * HOUR)).toBe('▾') // 0.2x
+  expect(sign(30, 2.5 * HOUR)).toBe('▾') // 0.6x
+  expect(sign(40, 2.5 * HOUR)).toBe('~') // 0.8x
+  expect(sign(50, 2.5 * HOUR)).toBe('~') // 1x
+  expect(sign(62, 2.5 * HOUR)).toBe('~') // 1.24x
+  expect(sign(70, 2.5 * HOUR)).toBe('▴') // 1.4x
+  expect(sign(50, HOUR)).toBe('▴') // 2.5x
 })
 
 test('a burn that will not last says when it runs out', () => {
   // 50% used after 1h of 5h: 2.5x an even burn, full in another hour
-  expect(formatLine(five(50, HOUR))).toBe('cache -- · 5h 50% ↑ 4h00m full in 1h00m')
+  expect(formatLine(five(50, HOUR))).toBe('cache -- · 5h 50% ▴ 4h00m full in 1h00m')
 })
 
 test('running out before the reset turns a low share yellow', () => {
@@ -141,21 +143,21 @@ test('pace waits until a tenth of the window has passed, and needs a reset time'
   expect(formatLine({ rateLimits: [{ kind: 'five_hour', percentUsed: 40 }], now: 0 })).toBe('cache -- · 5h 40%')
 })
 
-test('the weekly window gets the arrow too, with no reset time of its own', () => {
+test('the weekly window gets the sign too, with no reset time of its own', () => {
   const week = 7 * 24 * HOUR
   // 90% after 1 of 7 days burns 6.3x; the remaining 10% lasts ~2.7h
   const text = (pct: number, elapsed: number) => formatSegments({
     rateLimits: [{ kind: 'seven_day', percentUsed: pct, resetsAt: at(week - elapsed) }],
     now: 0,
   })[1].text
-  expect(text(90, 24 * HOUR)).toBe('7d 90% ↑ full in 2h40m')
-  expect(text(50, 3.5 * 24 * HOUR)).toBe('7d 50% →')
+  expect(text(90, 24 * HOUR)).toBe('7d 90% ▴ full in 2h40m')
+  expect(text(50, 3.5 * 24 * HOUR)).toBe('7d 50% ~')
   // too early in the week for a pace: nothing but the share
   expect(text(5, 6 * HOUR)).toBe('7d 5%')
 })
 
 test('a full window projects nothing', () => {
-  expect(formatLine(five(100, HOUR))).toBe('cache -- · 5h 100% ↑ 4h00m')
+  expect(formatLine(five(100, HOUR))).toBe('cache -- · 5h 100% ▴ 4h00m')
 })
 
 test('the compact button appears from 30% context, only while idle', () => {
@@ -164,25 +166,26 @@ test('the compact button appears from 30% context, only while idle', () => {
   expect(ctx(29, true).text).toBe('ctx 29%')
   expect(ctx(29, true).action).toBeUndefined()
   // the segment keeps its text and colour; the button is drawn after it
-  expect(ctx(30, true)).toMatchObject({ text: 'ctx 30%', level: 'ok', action: { kind: 'compact', label: '→ compact' } })
-  expect(ctx(85, true)).toMatchObject({ text: 'ctx 85%', level: 'bad', action: { kind: 'compact', label: '→ compact or hand off' } })
+  expect(ctx(30, true)).toMatchObject({ text: 'ctx 30%', level: 'ok', action: { kind: 'compact', label: '→ compact', isEnabled: true } })
+  expect(ctx(85, true)).toMatchObject({ text: 'ctx 85%', level: 'bad', action: { kind: 'compact', label: '→ compact or hand off', isEnabled: true } })
   // a request in flight: /compact would be refused, so the plain text stays
   expect(ctx(50, false).action).toBeUndefined()
   expect(ctx(85, false).text).toBe('ctx 85% → /compact or hand off')
 })
 
-test('keep-warm is offered whenever a warm cache can take a request', () => {
+test('the keep-warm sign is always there; it is live only for a warm cache that can take a request', () => {
   const cache = (minutesLeft: number, canWarm?: boolean) =>
     formatSegments({ rateLimits: [], cache: { sentAt: 0 }, canWarm, now: (60 - minutesLeft) * 60_000 })[0]
-  const warm = { kind: 'warm', label: '→ warm' }
-  expect(cache(59, true)).toMatchObject({ text: 'cache 59m', level: 'ok', action: warm })
+  const live = { kind: 'warm', label: '♨\uFE0E', isEnabled: true }
+  expect(cache(59, true)).toMatchObject({ text: 'cache 59m', level: 'ok', action: live })
   // the colour of the cache segment is what turns as the end nears
-  expect(cache(5, true)).toMatchObject({ text: 'cache 5m', level: 'warn', action: warm })
-  expect(cache(0.5, true)).toMatchObject({ text: 'cache <1m', level: 'warn', action: warm })
-  // a request in flight or one just sent: no second one
-  expect(cache(30, false).action).toBeUndefined()
-  expect(cache(30).action).toBeUndefined()
-  // a cold cache is not warmed: the request would write the whole prefix again
-  expect(formatSegments({ rateLimits: [], cache: { sentAt: 0 }, canWarm: true, now: 61 * 60_000 })[0]).toMatchObject({ text: 'cache cold' })
-  expect(formatSegments({ rateLimits: [], cache: { sentAt: 0 }, canWarm: true, now: 61 * 60_000 })[0].action).toBeUndefined()
+  expect(cache(5, true)).toMatchObject({ text: 'cache 5m', level: 'warn', action: live })
+  expect(cache(0.5, true)).toMatchObject({ text: 'cache <1m', level: 'warn', action: live })
+  // a request in flight or one just sent: the sign stays, inert
+  expect(cache(30, false).action).toMatchObject({ kind: 'warm', isEnabled: false })
+  expect(cache(30).action).toMatchObject({ kind: 'warm', isEnabled: false })
+  // a cold cache is not warmed (the request would write the whole prefix again), nor is one not yet started
+  const cold = formatSegments({ rateLimits: [], cache: { sentAt: 0 }, canWarm: true, now: 61 * 60_000 })[0]
+  expect(cold).toMatchObject({ text: 'cache cold', action: { kind: 'warm', isEnabled: false } })
+  expect(formatSegments({ rateLimits: [], canWarm: true, now: 0 })[0]).toMatchObject({ text: 'cache --', action: { kind: 'warm', isEnabled: false } })
 })
