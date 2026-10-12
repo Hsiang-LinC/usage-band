@@ -1,6 +1,6 @@
 {
   "name": "usage",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Band above the prompt: ctx %, cache countdown (1h TTL) and hit rate, 5h/7d quota used with pace, colored by level; press ctx to compact, cache to keep it warm, quota or hit for details",
   "author": {
     "name": "Hsiang-Lin Chan"
