@@ -9,6 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Commands
 
 - Test: `claude plugin test .` (tests import from `claude-code/testing`, not a standard runner)
+- Reinstall the working copy: `./scripts/reinstall.sh`. Run it after a change and before trying it out: the desktop app and the CLI pick up an installed plugin on their own schedules and drift apart otherwise. Open sessions keep the old code until restarted.
 - Install from the marketplace: `claude plugin marketplace add Hsiang-LinC/usage-band && claude plugin install usage@usage-band`
 - Type checking relies on `tsconfig.json` extending `.claude-plugin/types/tsconfig.json`, which is gitignored and provided by the Claude Code plugin tooling; it won't exist in a fresh checkout.
 
