@@ -42,10 +42,11 @@ Layout consequence found while building: a `Button` is refused inside an inline 
 
 ### 3. Keep-warm button
 
-- Shown only while the cache is **warm** (countdown > 0). When cold, `fork` would re-bill the whole prefix as a write, which is the opposite of the intent; no button.
+- Shown only while the cache is **warm** and within `WARM_WITHIN_MS` (10 min) of expiring, so the band is not noisy the rest of the hour. When cold, `fork` would re-bill the whole prefix as a write, which is the opposite of the intent; no button.
 - Press → `$.model.fork({ prompt: <minimal> })`; discard the reply. Guard: ignore while one is in flight and within 30 s of the last press (bounded; prevents double-press spend).
 - On success set `warmedAt = now`. The countdown runs from `max(newest pending/answered send, warmedAt)`. A fork does not produce a main-thread `turn.step`, so without this the band would not reset.
 - Failure (`api-error`, `nothing-to-fork`, `aborted`) → toast the reason, leave the countdown untouched.
+- Not verified: whether a fork leaves a session or transcript file behind (the API says it is a completion over the session's transcript, nothing more), and what it costs in subscription quota. The throwaway probe in the TTL experiment logs both.
 - Open question (inference, unverified): that a fork's cache read restarts the 1h TTL on the server. Verify empirically before shipping: press at ~55 m, confirm the next real request still reads from cache at ~65 m.
 - Cost: one cache read of the prefix plus a few output tokens. Press-to-extend is only worth it when the user will return within the hour; do not auto-fire (non-goal).
 
@@ -84,7 +85,7 @@ Slice 2 needs none: presses are toasts. Persistence (`$.store`, a single `setVie
 2. Pace / full-in on 5h and 7d, and press-for-detail on quota and hit (done).
 3. Compact button (done).
 4. Detailed mode (second line) and the layout pass.
-5. Keep-warm, after the TTL question above is verified.
+5. Keep-warm button (done, ahead of the TTL verification; see the open question in 3).
 
 Each slice ships as its own commit with a version bump in a separate `chore: bump version` commit; update README and `marketplace.json` description when the band's contents change.
 
