@@ -1,6 +1,6 @@
 # usage-band
 
-Band above the prompt: ctx %, cache countdown (1h TTL) and hit rate, 5h/7d quota used with pace, colored by level (quota green <50%, yellow <80%, red after; cache green >5m, yellow ≤5m, red cold; ctx same, and from 80% suggests /compact or a handoff)
+Band above the prompt: ctx %, cache countdown (1h TTL) and hit rate, 5h/7d quota used with pace, colored by level (quota green <50%, yellow <80%, red after; cache green >20m, yellow ≤20m, red cold; ctx same, and from 80% suggests /compact or a handoff)
 
 ```bash
 claude plugin marketplace add Hsiang-LinC/usage-band
@@ -36,14 +36,14 @@ beside them as buttons:
 - `ctx 45% → compact`: from 30% context, while no request is running. It runs
   `/compact`; a refused or vetoed compact is shown as a toast. The cache then
   starts over (`cache --`), since the prefix has changed.
-- `cache 52m ♨︎`: the sign is always there, so the band does not shift. Pressed,
+- `cache 52m ≋`: the sign is always there, so the band does not shift. Pressed,
   it sends one tiny request over the session's own prefix (`$.model.fork`),
   which reads the cached prefix and restarts the 1h TTL; a toast says how many
   tokens the cache served. It is dim and inert while a request runs, for 30s
   after a press, before the first request and once the cache is cold (that
   request would write the whole prefix again). It is a real request: on a
-  subscription it counts against the quota. The cache segment turns yellow in
-  the last 5 minutes and red when cold, as always.
+  subscription it counts against the quota. The cache segment turns yellow with
+  20 minutes left and red when cold.
 
 Click where the terminal reports clicks (not with `CLAUDE_CODE_DISABLE_MOUSE_CLICKS`),
 or press `ctrl+x` then `Tab` to focus the band, move with the arrows and press Enter.

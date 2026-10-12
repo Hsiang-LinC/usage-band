@@ -45,7 +45,7 @@ Layout consequences found while building:
 
 ### 3. Keep-warm button
 
-- The sign `♨︎` (U+2668 with U+FE0E, text presentation) is **always drawn** next to the cache segment, in a fixed 2-cell box, so the band never shifts. It is a live Button only for a warm cache and an idle session; otherwise the same glyph, dim and inert. The cache segment's colour is what warns as the end nears. When cold, `fork` would re-bill the whole prefix as a write, which is the opposite of the intent; no button.
+- The sign `≋` (steam) is **always drawn** next to the cache segment, in a fixed 3-cell box (the hot-spring sign U+2668 was tried first: it is also an emoji, which some terminals draw wide and in colour in a one-cell slot, so it was clipped), so the band never shifts. It is a live Button only for a warm cache and an idle session; otherwise the same glyph, dim and inert. The cache segment's colour is what warns as the end nears: yellow at 20 minutes left, red when cold. The 5s usage poll redraws only when a figure or the minute changed. When cold, `fork` would re-bill the whole prefix as a write, which is the opposite of the intent; no button.
 - Press → `$.model.fork({ prompt: <minimal> })`; discard the reply. Guard: ignore while one is in flight and within 30 s of the last press (bounded; prevents double-press spend).
 - On success set `warmedAt = now`. The countdown runs from `max(newest pending/answered send, warmedAt)`. A fork does not produce a main-thread `turn.step`, so without this the band would not reset.
 - Failure (`api-error`, `nothing-to-fork`, `aborted`) → toast the reason, leave the countdown untouched.
