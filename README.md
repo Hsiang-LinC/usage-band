@@ -20,18 +20,23 @@ a low share turns yellow. Nothing shows until a tenth of the window has passed.
 
 ## Pressing the band
 
-- `ctx`: from 30% context, while no request is running, it reads `→ compact`
-  and runs `/compact`. A refused or vetoed compact is shown as a toast. The
-  cache then starts over (`cache --`), since the prefix has changed.
-- `cache`: in the last ten minutes of a warm cache it reads `→ warm`. A press
-  sends one tiny request over the session's own prefix (`$.model.fork`), which
-  reads the cached prefix and restarts the 1h TTL; a toast says how many tokens
-  the cache served. Not offered while a request runs, for 30s after a press, or
-  once the cache is cold (that request would write the whole prefix again).
-  It is a real request: on a subscription it counts against the quota.
-- `5h`, `7d`: a toast with the share used, time to reset, pace and time to full.
-- `hit`: a toast with the newest request's read / written / uncached tokens and
-  the hit rate across the session.
+A Button is drawn in the surface's own style, so it cannot carry a segment's
+colour. The segments keep their colours as plain text, and the actions sit
+beside them as buttons:
+
+- `ctx 45% → compact`: from 30% context, while no request is running. It runs
+  `/compact`; a refused or vetoed compact is shown as a toast. The cache then
+  starts over (`cache --`), since the prefix has changed.
+- `cache 52m → warm`: sends one tiny request over the session's own prefix
+  (`$.model.fork`), which reads the cached prefix and restarts the 1h TTL; a
+  toast says how many tokens the cache served. Not offered while a request runs,
+  for 30s after a press, or once the cache is cold (that request would write the
+  whole prefix again). It is a real request: on a subscription it counts against
+  the quota. The cache segment turns yellow in the last 5 minutes and red when
+  cold, as always.
+- `info` (last on the band): a toast with the detail of `hit` (newest request's
+  read / written / uncached tokens, and the hit rate across the session), `5h`
+  and `7d` (share used, time to reset, pace, time to full).
 
 Click where the terminal reports clicks (not with `CLAUDE_CODE_DISABLE_MOUSE_CLICKS`),
 or press `ctrl+x` then `Tab` to focus the band, move with the arrows and press Enter.

@@ -31,7 +31,10 @@ Not found: no built-in keep-alive. `$.model.fork` is the closest primitive.
 
 `Segment` gains optional fields that say what a segment offers: `detail` (text shown on press, built in this step) and later an action for compact and keep-warm. `formatSegments` sets them only when their precondition holds; `register.tsx` wraps such a segment in `Button plain`. No field, no button. (conforms: core stays pure and unit-testable with injected `now`.)
 
-Layout consequence found while building: a `Button` is refused inside an inline `Text`, so the band is a `Box` row (`gap`, `flexWrap`), separators carry no spaces (the desktop trims whitespace at flex-item edges), and a Button's colour sits on each of its direct `Text` children.
+Layout consequences found while building:
+
+- A `Button` is refused inside an inline `Text`, so the band is a `Box` row (`gap`, `flexWrap`) and separators carry no spaces (the desktop trims whitespace at flex-item edges).
+- A Button's colour cannot be set: a surface that draws no children draws the `label` in its own style (the terminal does), so colour on the Button's `Text` children is lost. Segments therefore stay coloured plain text and an action is a separate plain Button beside it (`ctx 45% → compact`, `cache 52m → warm`); the detail of hit / 5h / 7d is one `info` Button at the end rather than a Button per segment.
 
 ### 2. Compact button
 
@@ -42,7 +45,7 @@ Layout consequence found while building: a `Button` is refused inside an inline 
 
 ### 3. Keep-warm button
 
-- Shown only while the cache is **warm** and within `WARM_WITHIN_MS` (10 min) of expiring, so the band is not noisy the rest of the hour. When cold, `fork` would re-bill the whole prefix as a write, which is the opposite of the intent; no button.
+- Shown whenever the cache is **warm** and the session idle (first drawn only in the last 10 minutes; always-on was preferred after trying it). The cache segment's colour is what warns as the end nears. When cold, `fork` would re-bill the whole prefix as a write, which is the opposite of the intent; no button.
 - Press → `$.model.fork({ prompt: <minimal> })`; discard the reply. Guard: ignore while one is in flight and within 30 s of the last press (bounded; prevents double-press spend).
 - On success set `warmedAt = now`. The countdown runs from `max(newest pending/answered send, warmedAt)`. A fork does not produce a main-thread `turn.step`, so without this the band would not reset.
 - Failure (`api-error`, `nothing-to-fork`, `aborted`) → toast the reason, leave the countdown untouched.
@@ -57,7 +60,7 @@ A used-% / time-to-reset toggle added nothing: 5h already shows both. What the A
 - `pace = used share / elapsed share` of the window; 1 is an even burn. Marker `▴` when > 1.25, `▾` when < 0.75, none between.
 - `fullIn = (1 − used) / (used / elapsed)`; shown as `→ full 1h00m` only when it comes **before the reset**. It lifts an `ok` level to `warn`.
 - Nothing is shown until 10% of the window has passed (`MIN_ELAPSED`): earlier, the rate is noise.
-- Pressing `5h` / `7d` toasts the detail (used, time to reset, pace, full-in). Pressing `hit` toasts the newest request's read / written / uncached tokens and the session-wide hit rate. No persisted view state: a press changes nothing on the band.
+- Pressing `info` toasts the detail of every segment that has one: `5h` / `7d` (used, time to reset, pace, full-in) and `hit` (newest request's read / written / uncached tokens and the session-wide hit rate). No persisted view state: a press changes nothing on the band.
 
 ### 5. Compact vs detailed mode
 
