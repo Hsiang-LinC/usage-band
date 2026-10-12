@@ -2,7 +2,10 @@ export const CACHE_TTL_MS = 60 * 60 * 1000
 
 export type Level = 'ok' | 'warn' | 'bad' | 'none'
 // session: ctx and cache; quota: 5h and 7d. The band separates the two groups.
-export type Segment = { text: string; level: Level; group: 'session' | 'quota' }
+// detail: what pressing the segment shows; absent means it is not pressable.
+export type Segment = { text: string; level: Level; group: 'session' | 'quota'; detail?: string }
+
+type Usage = { input: number; cacheRead: number; cacheWrite: number }
 
 export type LineInput = {
   contextPercent?: number
@@ -13,7 +16,9 @@ export type LineInput = {
     // request reads or writes the cache, not when its response ends.
     sentAt: number
     // Figures of the newest request that answered; absent while none has.
-    usage?: { input: number; cacheRead: number; cacheWrite: number }
+    usage?: Usage
+    // Sum over every answered main-thread request, for the hit detail.
+    total?: Usage
   }
   now: number
 }
@@ -21,13 +26,50 @@ export type LineInput = {
 // Green <50, yellow <80, red after; shared by ctx and quota.
 const byUsed = (pct: number): Level => (pct >= 80 ? 'bad' : pct >= 50 ? 'warn' : 'ok')
 
-// "2h13m" / "45m"; undefined once the window has already reset.
+// "3d04h" / "2h13m" / "45m"
+function duration(ms: number): string {
+  const mins = Math.max(1, Math.floor(ms / 60_000))
+  if (mins >= 1440) return `${Math.floor(mins / 1440)}d${String(Math.floor((mins % 1440) / 60)).padStart(2, '0')}h`
+  return mins >= 60 ? `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, '0')}m` : `${mins}m`
+}
+
+// Time until the window resets; undefined once it already has.
 function untilReset(resetsAt: string | undefined, now: number): string | undefined {
   if (resetsAt === undefined) return undefined
   const ms = Date.parse(resetsAt) - now
-  if (!(ms > 0)) return undefined
-  const mins = Math.max(1, Math.floor(ms / 60_000))
-  return mins >= 60 ? `${Math.floor(mins / 60)}h${String(mins % 60).padStart(2, '0')}m` : `${mins}m`
+  return ms > 0 ? duration(ms) : undefined
+}
+
+const hitPercent = (u: Usage | undefined): number | undefined => {
+  const total = u ? u.input + u.cacheRead + u.cacheWrite : 0
+  return u && total > 0 ? Math.floor((u.cacheRead / total) * 100) : undefined
+}
+
+const WINDOW_MS = { five_hour: 5 * 3_600_000, seven_day: 7 * 86_400_000 } as const
+// Too little of a window has passed for its burn rate to say anything.
+const MIN_ELAPSED = 0.1
+const AHEAD = 1.25
+const BEHIND = 0.75
+
+type Pace = {
+  // used share over elapsed share of the window: 1 is an even burn
+  ratio: number
+  // ms until 100% at the burn so far, when that comes before the reset
+  fullIn?: number
+}
+
+function pace(kind: keyof typeof WINDOW_MS, percentUsed: number, resetsAt: string | undefined, now: number): Pace | undefined {
+  if (resetsAt === undefined) return undefined
+  const length = WINDOW_MS[kind]
+  const left = Date.parse(resetsAt) - now
+  const elapsed = length - left
+  if (!(left > 0) || elapsed < length * MIN_ELAPSED) return undefined
+  const used = percentUsed / 100
+  const ratio = used / (elapsed / length)
+  if (used <= 0 || used >= 1) return { ratio }
+  // whole minutes, so float noise never moves a displayed minute
+  const fullIn = Math.round(((1 - used) / (used / elapsed)) / 60_000) * 60_000
+  return { ratio, fullIn: fullIn < left ? fullIn : undefined }
 }
 
 export function formatSegments(i: LineInput): Segment[] {
@@ -44,17 +86,25 @@ export function formatSegments(i: LineInput): Segment[] {
   if (c === undefined) {
     parts.push({ text: 'cache --', level: 'none', group: 'session' })
   } else {
-    const u = c.usage
-    const total = u ? u.input + u.cacheRead + u.cacheWrite : 0
     const remaining = c.sentAt + CACHE_TTL_MS - i.now
-    const hit = u && total > 0 ? ` · hit ${Math.floor((u.cacheRead / total) * 100)}%` : ''
     if (remaining <= 0) {
       parts.push({ text: 'cache cold', level: 'bad', group: 'session' })
     } else {
       const text =
         remaining < 60_000 ? 'cache <1m' : `cache ${Math.floor(remaining / 60_000)}m`
       const level: Level = remaining > 5 * 60_000 ? 'ok' : 'warn'
-      parts.push({ text: text + hit, level, group: 'session' })
+      parts.push({ text, level, group: 'session' })
+      const hit = hitPercent(c.usage)
+      if (hit !== undefined && c.usage) {
+        const u = c.usage
+        const all = hitPercent(c.total)
+        parts.push({
+          text: `hit ${hit}%`,
+          level,
+          group: 'session',
+          detail: `hit ${hit}% on the newest request (read ${u.cacheRead} · written ${u.cacheWrite} · uncached ${u.input} tokens)${all === undefined ? '' : ` · ${all}% across the session`}`,
+        })
+      }
     }
   }
 
@@ -65,11 +115,22 @@ export function formatSegments(i: LineInput): Segment[] {
     const w = i.rateLimits.find(r => r.kind === kind)
     if (w) {
       const pct = Math.floor(w.percentUsed)
-      const reset = kind === 'five_hour' ? untilReset(w.resetsAt, i.now) : undefined
+      const reset = untilReset(w.resetsAt, i.now)
+      const p = pace(kind, w.percentUsed, w.resetsAt, i.now)
+      const marker = p === undefined ? '' : p.ratio > AHEAD ? '▴' : p.ratio < BEHIND ? '▾' : ''
+      const full = p?.fullIn === undefined ? '' : ` → full ${duration(p.fullIn)}`
+      const base = byUsed(pct)
       parts.push({
-        text: `${label} ${pct}%${reset ? ` ↻ ${reset}` : ''}`,
-        level: byUsed(pct),
+        text: `${label} ${pct}%${marker}${kind === 'five_hour' && reset ? ` ↻ ${reset}` : ''}${full}`,
+        // running out before the reset is worth a yellow even while the share is low
+        level: p?.fullIn !== undefined && base === 'ok' ? 'warn' : base,
         group: 'quota',
+        detail: [
+          `${label} ${pct}% used`,
+          reset === undefined ? undefined : `resets in ${reset}`,
+          p === undefined ? undefined : `pace ${p.ratio.toFixed(1)}x an even burn`,
+          p?.fullIn === undefined ? undefined : `full in ${duration(p.fullIn)}`,
+        ].filter(part => part !== undefined).join(' · '),
       })
     }
   }

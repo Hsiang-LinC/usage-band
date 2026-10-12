@@ -33,7 +33,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
 }
 
 for (const surface of ['terminal', 'desktop'] as const) {
-  test(`${surface}: the segments are one inline run beside the icon`, async ($, on) => {
+  test(`${surface}: segments are flex items spaced by gap, not by spaces`, async ($, on) => {
     mock.clock(on)
     engineBand(on)
     on('session.measure', () => ({ changed: [] }))
@@ -41,15 +41,31 @@ for (const surface of ['terminal', 'desktop'] as const) {
     await $.session.measure({ context: { percent: 32 }, rateLimits: [{ kind: 'five_hour', percentUsed: 86 }] })
     const ui = await $.ui.mount({ plugin: 'usage', surface, component: 'AbovePrompt', requestId: 'run-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
     // the desktop draws Box as a flex row and trims the whitespace at each
-    // flex item's edges, so separators must sit inside one Text, not between
+    // flex item's edges, so the spacing between items is `gap`, and no item
+    // starts or ends with a space
     const [row] = (await ui.drawn()).children as [{ type: string; children: unknown[] }]
     expect(row.type).toBe('Box')
-    expect(row.children).toMatchObject([{ type: 'Box', props: { width: 2 } }, { type: 'Text' }])
-    const run = (await ui.findAll({ type: 'Text' })).find(text => /^ctx /.test(text.text))
-    expect(run?.text).toBe('ctx 32% · cache -- │ 5h 86%')
+    expect(row.children).toMatchObject([{ type: 'Box', props: { width: 2 } }, { type: 'Box', props: { gap: 1 } }])
+    const texts = (await ui.findAll({ type: 'Text' })).map(text => text.text)
+    expect(texts.filter(text => text === '·' || text === '│')).toEqual(['·', '│'])
+    expect(texts.filter(text => /^ | $/.test(text) && text.length > 1 && !/^(ctx|cache|5h) $/.test(text))).toEqual([])
     await ui.unmount()
   })
 }
+
+test('pressing the 5h segment toasts its detail', async ($, on) => {
+  mock.clock(on)
+  engineBand(on)
+  const toasts: string[] = []
+  on('ui.toast', (_$, e) => { toasts.push(e.text); return { value: undefined } })
+  on('session.measure', () => ({ changed: [] }))
+  on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
+  await $.session.measure({ context: { percent: 32 }, rateLimits: [{ kind: 'five_hour', percentUsed: 86 }] })
+  const ui = await $.ui.mount({ plugin: 'usage', surface: 'terminal', component: 'AbovePrompt', requestId: 'press-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
+  await ui.press({ plugin: 'usage', key: 'seg-2' })
+  expect(toasts).toEqual(['5h 86% used'])
+  await ui.unmount()
+})
 
 for (const appearance of ['light', 'dark'] as const) {
   test(`auto uses macOS ${appearance} appearance and caches detection`, async ($, on) => {
@@ -240,5 +256,29 @@ test('keeps the drawing beneath under the usage row', async ($, on) => {
   const root = await ui.drawn()
   expect(root.props).toMatchObject({ flexDirection: 'column' })
   expect(root.children).toMatchObject([{ type: 'Box' }, { type: 'Text', children: ['another mod'] }])
+  await ui.unmount()
+})
+
+test('pressing hit toasts the newest request and the session', async ($, on) => {
+  mock.clock(on)
+  engineBand(on)
+  const toasts: string[] = []
+  on('ui.toast', (_$, e) => { toasts.push(e.text); return { value: undefined } })
+  on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
+  let cacheRead = 0
+  on('turn.step', async function* (_$, e) {
+    return {
+      turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const,
+      usage: { model: e.model, input_tokens: 100, output_tokens: 1, cache_read_input_tokens: cacheRead, cache_creation_input_tokens: 900 - cacheRead },
+    }
+  })
+  for (const [index, read] of [0, 900].entries()) {
+    cacheRead = read
+    for await (const _ of $.turn.step({ turnId: 't', index, model: 'm', messageCount: 1 })) { /* drain */ }
+  }
+  const ui = await $.ui.mount({ plugin: 'usage', surface: 'terminal', component: 'AbovePrompt', requestId: 'hit-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
+  await ui.press({ plugin: 'usage', key: 'seg-1' })
+  // the session: (0 + 900) cache reads of (1000 + 1000) input tokens
+  expect(toasts).toEqual(['hit 90% on the newest request (read 900 · written 0 · uncached 100 tokens) · 45% across the session'])
   await ui.unmount()
 })

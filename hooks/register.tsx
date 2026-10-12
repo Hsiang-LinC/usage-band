@@ -8,6 +8,8 @@ let answered: { sentAt: number; usage: CacheUsage } | undefined
 // main-thread requests in flight, by identity (two may share a millisecond);
 // the icon grows only while this is non-empty
 const pending = new Set<{ sentAt: number }>()
+// every answered main-thread request's usage summed, for the hit detail
+let total: CacheUsage | undefined
 let contextPercent: number | undefined
 let rateLimits: LineInput['rateLimits'] = []
 let tick: Timer | undefined
@@ -71,7 +73,7 @@ function cacheState(): LineInput['cache'] {
   for (const request of pending) {
     if (sentAt === undefined || request.sentAt > sentAt) sentAt = request.sentAt
   }
-  return sentAt === undefined ? undefined : { sentAt, usage: answered?.usage }
+  return sentAt === undefined ? undefined : { sentAt, usage: answered?.usage, total }
 }
 
 // A minute ticker phased on the countdown's start, so the band redraws
@@ -130,14 +132,19 @@ export const register: Register = on => {
     redraw($)
     try {
       const r = yield* next(e)
-      if (r.usage && (answered === undefined || request.sentAt >= answered.sentAt)) {
-        answered = {
-          sentAt: request.sentAt,
-          usage: {
-            input: r.usage.input_tokens,
-            cacheRead: r.usage.cache_read_input_tokens,
-            cacheWrite: r.usage.cache_creation_input_tokens,
-          },
+      if (r.usage) {
+        const usage = {
+          input: r.usage.input_tokens,
+          cacheRead: r.usage.cache_read_input_tokens,
+          cacheWrite: r.usage.cache_creation_input_tokens,
+        }
+        total = {
+          input: (total?.input ?? 0) + usage.input,
+          cacheRead: (total?.cacheRead ?? 0) + usage.cacheRead,
+          cacheWrite: (total?.cacheWrite ?? 0) + usage.cacheWrite,
+        }
+        if (answered === undefined || request.sentAt >= answered.sentAt) {
+          answered = { sentAt: request.sentAt, usage }
         }
       }
       return r
@@ -168,8 +175,29 @@ export const register: Register = on => {
     // other mods share the band (vault-jot adds its row), so draw on top of
     // what lies beneath rather than in its place
     const beneath = await next(e)
-    const { Box, Text } = $.ui.resolve(e)
+    const { Box, Button, Text } = $.ui.resolve(e)
     const theme = await palette($)
+    // label dim-free, values bold: "5h 20% ↻ 2h13m" bolds 20% and 2h13m
+    const body = (s: (typeof segments)[number]) => (
+      <Text color={theme.colors[s.level]}>
+        <Text>{s.text.slice(0, s.text.indexOf(' ') + 1)}</Text>
+        {s.text.slice(s.text.indexOf(' ') + 1).split(/(<?\d+(?:[dh]\d+)?[dhm%])/).filter(text => text !== '').map((text, j) => (
+          <Text key={String(j)} bold={/^(<?\d+(?:[dh]\d+)?[dhm%])$/.test(text)}>{text}</Text>
+        ))}
+      </Text>
+    )
+    // A Button draws its Text children itself, so the colour sits on each of
+    // them: a Text nested inside a Text loses it there.
+    const buttonParts = (s: (typeof segments)[number]) => {
+      const at = s.text.indexOf(' ')
+      return [
+        <Text key="label" color={theme.colors[s.level]}>{s.text.slice(0, at)}</Text>,
+        ' ',
+        ...s.text.slice(at + 1).split(/(<?\d+(?:[dh]\d+)?[dhm%])/).filter(text => text !== '').map((text, j) => (
+          <Text key={String(j)} color={theme.colors[s.level]} bold={/^(<?\d+(?:[dh]\d+)?[dhm%])$/.test(text)}>{text}</Text>
+        )),
+      ]
+    }
     return (
       <Box flexDirection="column">
         <Box paddingX={1}>
@@ -177,23 +205,21 @@ export const register: Register = on => {
           <Box width={2} flexShrink={0}>
             <Text color={theme.stars[Math.floor(frame / STARS.length)]}>{STARS[frame % STARS.length]}</Text>
           </Box>
-          {/* one inline run: the desktop draws Box as a flex row and trims the
-              whitespace at each flex item's edges, which would eat the separators' spaces */}
-          <Text>
-            {segments.map((s, i) => (
-              <Text key={String(i)}>
-                {i > 0 ? (
-                  <Text color={theme.neutral}>{segments[i - 1].group === s.group ? ' · ' : ' │ '}</Text>
-                ) : null}
-                <Text color={theme.colors[s.level]}>
-                  <Text>{s.text.slice(0, s.text.indexOf(' ') + 1)}</Text>
-                  {s.text.slice(s.text.indexOf(' ') + 1).split(/(<?\d+(?:h\d+)?[hm%])/).filter(text => text !== '').map((text, j) => (
-                    <Text key={String(j)} bold={/^(<?\d+(?:h\d+)?[hm%])$/.test(text)}>{text}</Text>
-                  ))}
-                </Text>
-              </Text>
-            ))}
-          </Text>
+          {/* A Button cannot sit inside an inline Text, so the segments are flex
+              items. The desktop trims whitespace at each item's edges: the gaps
+              between items come from `gap`, never from spaces in the separators. */}
+          <Box gap={1} flexWrap="wrap">
+            {segments.flatMap((s, i) => [
+              ...(i > 0
+                ? [<Text key={`sep-${i}`} color={theme.neutral}>{segments[i - 1].group === s.group ? '·' : '│'}</Text>]
+                : []),
+              s.detail === undefined ? (
+                <Box key={`seg-${i}`}>{body(s)}</Box>
+              ) : (
+                <Button key={`seg-${i}`} plain onPress={() => $.ui.toast(s.detail!)}>{buttonParts(s)}</Button>
+              ),
+            ])}
+          </Box>
         </Box>
         {beneath}
       </Box>
