@@ -57,9 +57,9 @@ Layout consequences found while building:
 
 A used-% / time-to-reset toggle added nothing: 5h already shows both. What the API does not give is *how fast the burn is*. From the window length (5h, 7d), `resetsAt` and the used share:
 
-- `pace = used share / elapsed share` of the window; 1 is an even burn. It is shown as one sign before the reset time (`5h 50% ▴ 2h10m`; 7d shows the sign only): `▾` below 0.75, `▴` above 1.25, `~` between (not `·`, which already separates segments). Five arrows and a speedometer-needle idea were tried and dropped: the three small signs are narrower and clearer.
+- `pace = used share / elapsed share` of the window; 1 is an even burn. It is shown as one sign before the reset time (`5h 50% ▴ 2h10m`; 7d shows the sign only): `▾` below 0.75, `▴` above 1.25, `▪` between (not `~` or `·`: the square matches the triangles, and `·` already separates segments). Five arrows and a speedometer-needle idea were tried and dropped: the three small signs are narrower and clearer.
 - A projection (`full in 1h00m`, with a yellow lift) was built and removed: the sign and the reset time are enough.
-- Nothing is shown until 10% of the window has passed (`MIN_ELAPSED`): earlier, the rate is noise. 5h then keeps `↻`; 7d shows its share only.
+- Nothing is shown until 10% of the window has passed (`MIN_ELAPSED`): earlier, the rate is noise. 5h then shows a hollow `◦` of the same size; 7d shows its share only.
 - A press-for-detail toast (an `info` button for hit / 5h / 7d) was built and removed: the band already says what the toast repeated.
 
 ### 5. Compact vs detailed mode

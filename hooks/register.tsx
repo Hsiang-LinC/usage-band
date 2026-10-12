@@ -241,7 +241,7 @@ export const register: Register = on => {
     const beneath = await next(e)
     const { Box, Button, Text } = $.ui.resolve(e)
     const theme = await palette($)
-    // label dim-free, values bold: "5h 20% ↻ 2h13m" bolds 20% and 2h13m
+    // label dim-free, values bold: "5h 20% ▾ 2h13m" bolds 20% and 2h13m
     const body = (s: (typeof segments)[number]) => (
       <Text color={theme.colors[s.level]}>
         <Text>{s.text.slice(0, s.text.indexOf(' ') + 1)}</Text>

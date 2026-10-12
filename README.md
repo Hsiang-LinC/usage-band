@@ -19,11 +19,11 @@ Test: `claude plugin test .`
 | sign | burn, against an even one |
 |---|---|
 | `▾` | under three quarters |
-| `~` | about even |
+| `▪` | about even |
 | `▴` | over a quarter faster |
 
 `5h 50% ▴ 2h10m` reads: half used, burning faster than even, 2h10m to reset.
-Until a tenth of the window has passed there is no pace: 5h shows the plain `↻`
+Until a tenth of the window has passed there is no pace: 5h shows a hollow `◦`
 reset sign and 7d only its share.
 
 ## Pressing the band
