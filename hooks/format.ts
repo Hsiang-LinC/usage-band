@@ -8,11 +8,13 @@ export type Segment = {
   level: Level
   group: 'session' | 'quota'
   detail?: string
-  action?: 'compact'
+  action?: 'compact' | 'warm'
 }
 
 // From this context share on, an idle session is offered the compact button.
 export const COMPACT_FROM = 30
+// Within this long of expiring, a warm cache is offered a keep-warm press.
+export const WARM_WITHIN_MS = 10 * 60_000
 
 type Usage = { input: number; cacheRead: number; cacheWrite: number }
 
@@ -22,6 +24,8 @@ export type LineInput = {
   // Absent until a main-thread request has been sent.
   // Whether /compact can run now: it is refused while a request is in flight.
   canCompact?: boolean
+  // Whether a keep-warm request can go now: nothing in flight, none just sent.
+  canWarm?: boolean
   cache?: {
     // When the newest counted request was sent (ms): the TTL restarts when a
     // request reads or writes the cache, not when its response ends.
@@ -109,7 +113,11 @@ export function formatSegments(i: LineInput): Segment[] {
       const text =
         remaining < 60_000 ? 'cache <1m' : `cache ${Math.floor(remaining / 60_000)}m`
       const level: Level = remaining > 5 * 60_000 ? 'ok' : 'warn'
-      parts.push({ text, level, group: 'session' })
+      if (i.canWarm && remaining <= WARM_WITHIN_MS) {
+        parts.push({ text: `${text} → warm`, level, group: 'session', action: 'warm' })
+      } else {
+        parts.push({ text, level, group: 'session' })
+      }
       const hit = hitPercent(c.usage)
       if (hit !== undefined && c.usage) {
         const u = c.usage

@@ -335,3 +335,70 @@ test('the compact button is gone while a request is in flight', async ($, on) =>
   expect(await ui.find({ type: 'Button', text: /compact/ })).toBeDefined()
   await ui.unmount()
 })
+
+// A session whose one request was sent at 0, `minutes` ago.
+const warmBand = async (
+  $: Parameters<Parameters<typeof test>[1]>[0],
+  on: Parameters<Parameters<typeof test>[1]>[1],
+  fork: () => unknown,
+  minutesAgo: number,
+) => {
+  const clock = mock.clock(on)
+  engineBand(on)
+  const toasts: string[] = []
+  let forks = 0
+  on('ui.toast', (_$, e) => { toasts.push(e.text); return { value: undefined } })
+  on('model.fork', () => { forks++; return { value: fork() } as never })
+  on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
+  on('turn.step', async function* (_$, e) {
+    return {
+      turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const,
+      usage: { model: e.model, input_tokens: 100, output_tokens: 1, cache_read_input_tokens: 900, cache_creation_input_tokens: 0 },
+    }
+  })
+  for await (const _ of $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: 1 })) { /* drain */ }
+  await clock.advance(minutesAgo * 60_000)
+  const ui = await $.ui.mount({ plugin: 'usage', surface: 'terminal', component: 'AbovePrompt', requestId: 'warm-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
+  return { ui, toasts, forks: () => forks, clock }
+}
+const answered = (read: number, written: number) => ({
+  isAnswered: true, text: 'ok',
+  usage: { model: 'm', input_tokens: 5, output_tokens: 1, cache_read_input_tokens: read, cache_creation_input_tokens: written },
+})
+
+test('pressing keep-warm restarts the countdown and reports what the cache served', async ($, on) => {
+  const { ui, toasts, forks } = await warmBand($, on, () => answered(45_000, 0), 52)
+  expect(await ui.find({ type: 'Text', text: /^8m$/ })).toBeDefined()
+  await ui.press({ plugin: 'usage', key: 'seg-0' })
+  expect(forks()).toBe(1)
+  expect(toasts).toEqual(['cache kept warm (45000 tokens read)'])
+  expect(await ui.find({ type: 'Text', text: /^(59|60)m$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a lapsed cache is said to have been written again', async ($, on) => {
+  const { ui, toasts } = await warmBand($, on, () => answered(0, 45_000), 52)
+  await ui.press({ plugin: 'usage', key: 'seg-0' })
+  expect(toasts).toEqual(['cache had lapsed: 45000 tokens written again'])
+  await ui.unmount()
+})
+
+test('a failed keep-warm is toasted and leaves the countdown alone', async ($, on) => {
+  const { ui, toasts } = await warmBand($, on, () => ({ isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: {} }), 52)
+  await ui.press({ plugin: 'usage', key: 'seg-0' })
+  expect(toasts).toEqual(['keep-warm failed: api-error'])
+  expect(await ui.find({ type: 'Text', text: /^8m$/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the keep-warm button waits out a cooldown after a press', async ($, on) => {
+  const { ui, forks, clock } = await warmBand($, on, () => answered(45_000, 0), 52)
+  await ui.press({ plugin: 'usage', key: 'seg-0' })
+  expect(await ui.find({ type: 'Button', text: /warm/ })).toBeUndefined()
+  // the countdown restarted, so nothing to offer until it nears the end again
+  await clock.advance(51 * 60_000)
+  expect(await ui.find({ type: 'Button', text: /warm/ })).toBeDefined()
+  await ui.press({ plugin: 'usage', key: 'seg-0' })
+  expect(forks()).toBe(2)
+  await ui.unmount()
+})

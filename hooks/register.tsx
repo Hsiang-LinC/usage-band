@@ -10,6 +10,11 @@ let answered: { sentAt: number; usage: CacheUsage } | undefined
 const pending = new Set<{ sentAt: number }>()
 // every answered main-thread request's usage summed, for the hit detail
 let total: CacheUsage | undefined
+// when the newest keep-warm request was sent: like any request, it restarts
+// the cache's TTL
+let warmedAt: number | undefined
+let warming = false
+let lastWarm: number | undefined
 let contextPercent: number | undefined
 let rateLimits: LineInput['rateLimits'] = []
 let tick: Timer | undefined
@@ -18,6 +23,8 @@ let frame = 0
 let anim: Timer | undefined
 
 const POLL_MS = 5_000
+// a keep-warm press is ignored this long after the last one
+const WARM_COOLDOWN_MS = 30_000
 const ANIM_MS = 200
 const STARS = ['✶', '✴', '✷', '✦', '✧', '✦']
 // One full shape cycle (1.2s) per colour; no opacity blinking.
@@ -79,9 +86,37 @@ async function compact($: EngineInterface) {
   // the compacted transcript is a new prefix: what was cached no longer
   // matches, so the next request starts the countdown afresh
   answered = undefined
+  warmedAt = undefined
   tick?.cancel()
   tick = undefined
   redraw($)
+}
+
+// A minimal request over the session's own prefix: it reads the cached
+// prefix, which restarts the TTL, and answers one word. Not retried; a
+// failure or a cut-off request is toasted and leaves the countdown alone.
+async function warm($: EngineInterface) {
+  warming = true
+  redraw($)
+  const sentAt = await $.clock.now()
+  try {
+    const r = await $.model.fork({ prompt: 'Reply with the single word: ok' })
+    if (!r.isAnswered) return void $.ui.toast(`keep-warm failed: ${r.reason}`)
+    warmedAt = sentAt
+    phaseTicker($, await $.clock.now())
+    const { cache_read_input_tokens: read, cache_creation_input_tokens: written } = r.usage
+    $.ui.toast(read >= written
+      ? `cache kept warm (${read} tokens read)`
+      : `cache had lapsed: ${written} tokens written again`)
+  } catch (error) {
+    $.ui.toast(`keep-warm failed: ${error instanceof Error ? error.message : String(error)}`)
+  } finally {
+    warming = false
+    lastWarm = await $.clock.now()
+    // the button comes back once the cooldown is over
+    $.clock.after(WARM_COOLDOWN_MS, () => redraw($))
+    redraw($)
+  }
 }
 
 // The countdown runs from the newest request sent, answered or still in
@@ -91,6 +126,7 @@ function cacheState(): LineInput['cache'] {
   for (const request of pending) {
     if (sentAt === undefined || request.sentAt > sentAt) sentAt = request.sentAt
   }
+  if (warmedAt !== undefined && (sentAt === undefined || warmedAt > sentAt)) sentAt = warmedAt
   return sentAt === undefined ? undefined : { sentAt, usage: answered?.usage, total }
 }
 
@@ -182,12 +218,14 @@ export const register: Register = on => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
+    const now = await $.clock.now()
     const segments = formatSegments({
       contextPercent,
       rateLimits,
       cache: cacheState(),
       canCompact: pending.size === 0,
-      now: await $.clock.now(),
+      canWarm: pending.size === 0 && !warming && (lastWarm === undefined || now - lastWarm >= WARM_COOLDOWN_MS),
+      now,
     })
     if (segments.length === 0) return next(e)
 
@@ -232,7 +270,7 @@ export const register: Register = on => {
               s.detail === undefined && s.action === undefined ? (
                 <Box key={`seg-${i}`}>{body(s)}</Box>
               ) : (
-                <Button key={`seg-${i}`} plain onPress={() => (s.action === 'compact' ? compact($) : $.ui.toast(s.detail!))}>{buttonParts(s)}</Button>
+                <Button key={`seg-${i}`} plain onPress={() => (s.action === 'compact' ? compact($) : s.action === 'warm' ? warm($) : $.ui.toast(s.detail!))}>{buttonParts(s)}</Button>
               ),
             ])}
           </Box>

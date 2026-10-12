@@ -188,3 +188,22 @@ test('the compact button appears from 30% context, only while idle', () => {
   expect(ctx(50, false).action).toBeUndefined()
   expect(ctx(85, false).text).toBe('ctx 85% → /compact or hand off')
 })
+
+test('keep-warm is offered only in the last ten minutes of a warm cache', () => {
+  const cache = (minutesLeft: number, canWarm?: boolean) =>
+    formatSegments({
+      rateLimits: [],
+      cache: { sentAt: 0 },
+      canWarm,
+      now: (60 - minutesLeft) * 60_000,
+    })[0]
+  expect(cache(10, true)).toMatchObject({ text: 'cache 10m → warm', action: 'warm', level: 'ok' })
+  expect(cache(0.5, true)).toMatchObject({ text: 'cache <1m → warm', action: 'warm' })
+  expect(cache(11, true)).toMatchObject({ text: 'cache 11m' })
+  expect(cache(11, true).action).toBeUndefined()
+  // a request in flight or one just sent: no second one
+  expect(cache(5, false).text).toBe('cache 5m')
+  expect(cache(5).action).toBeUndefined()
+  // a cold cache is not warmed: the request would write the whole prefix again
+  expect(formatSegments({ rateLimits: [], cache: { sentAt: 0 }, canWarm: true, now: 61 * 60_000 })[0]).toMatchObject({ text: 'cache cold' })
+})
