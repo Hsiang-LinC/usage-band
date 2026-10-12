@@ -48,16 +48,12 @@ test('levels follow usage and remaining cache time', () => {
   expect(seg(61 * 60_000, 49).map(s => s.level)).toEqual(['bad', 'ok'])
 })
 
-test('ctx warns at 50%, and at 80% suggests compacting or handing off', () => {
+test('ctx turns yellow at 50% and red at 80%', () => {
   const ctx = (contextPercent: number) =>
     formatSegments({ contextPercent, rateLimits: [], now: 0 })[0]
   expect(ctx(49.9)).toEqual({ text: 'ctx 49%', level: 'ok', group: 'session' })
   expect(ctx(50)).toEqual({ text: 'ctx 50%', level: 'warn', group: 'session' })
-  expect(ctx(80)).toEqual({
-    text: 'ctx 80% → /compact or hand off',
-    level: 'bad',
-    group: 'session',
-  })
+  expect(ctx(80)).toEqual({ text: 'ctx 80%', level: 'bad', group: 'session' })
 })
 
 test('5h shows time to reset; past or missing reset is omitted', () => {
@@ -135,33 +131,30 @@ test('pace waits until a tenth of the window has passed, and needs a reset time'
   expect(formatLine({ rateLimits: [{ kind: 'five_hour', percentUsed: 40 }], now: 0 })).toBe('cache -- · 5h 40%')
 })
 
-test('the weekly window gets the sign and its reset time too', () => {
+test('the weekly window gets the sign, but no reset time', () => {
   const week = 7 * 24 * HOUR
   const text = (pct: number, elapsed: number) => formatSegments({
     rateLimits: [{ kind: 'seven_day', percentUsed: pct, resetsAt: at(week - elapsed) }],
     now: 0,
   })[1].text
-  expect(text(90, 24 * HOUR)).toBe('7d 90% ▴ 6d00h')
-  expect(text(50, 3.5 * 24 * HOUR)).toBe('7d 50% ~ 3d12h')
-  // too early in the week for a pace: the plain reset sign
-  expect(text(5, 6 * HOUR)).toBe('7d 5% ↻ 6d18h')
+  expect(text(90, 24 * HOUR)).toBe('7d 90% ▴')
+  expect(text(50, 3.5 * 24 * HOUR)).toBe('7d 50% ~')
+  // too early in the week for a pace: nothing but the share
+  expect(text(5, 6 * HOUR)).toBe('7d 5%')
 })
 
 test('a full window projects nothing', () => {
   expect(formatLine(five(100, HOUR))).toBe('cache -- · 5h 100% ▴ 4h00m')
 })
 
-test('the compact button appears from 30% context, only while idle', () => {
+test('ctx is pressable (compact) once it is yellow, only while idle', () => {
   const ctx = (contextPercent: number, canCompact?: boolean) =>
     formatSegments({ contextPercent, rateLimits: [], canCompact, now: 0 })[0]
-  expect(ctx(29, true).text).toBe('ctx 29%')
-  expect(ctx(29, true).action).toBeUndefined()
-  // the segment keeps its text and colour; the button is drawn after it
-  expect(ctx(30, true)).toMatchObject({ text: 'ctx 30%', level: 'ok', action: { kind: 'compact', label: '→ compact', isEnabled: true } })
-  expect(ctx(85, true)).toMatchObject({ text: 'ctx 85%', level: 'bad', action: { kind: 'compact', label: '→ compact or hand off', isEnabled: true } })
-  // a request in flight: /compact would be refused, so the plain text stays
+  expect(ctx(49, true).action).toBeUndefined()
+  expect(ctx(50, true)).toMatchObject({ text: 'ctx 50%', level: 'warn', action: { kind: 'compact', isEnabled: true } })
+  expect(ctx(85, true)).toMatchObject({ text: 'ctx 85%', level: 'bad', action: { kind: 'compact', isEnabled: true } })
+  // a request in flight: /compact would be refused
   expect(ctx(50, false).action).toBeUndefined()
-  expect(ctx(85, false).text).toBe('ctx 85% → /compact or hand off')
 })
 
 test('the keep-warm sign is always there; it is live only under 30 minutes, for an idle session', () => {

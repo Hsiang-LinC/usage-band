@@ -260,7 +260,7 @@ const compactBand = async (
   on('ui.toast', (_$, e) => { toasts.push(e.text); return { value: undefined } })
   on('session.compact', () => { compactions++; return compacting() as never })
   on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
-  await $.session.measure({ context: { percent: 45 }, rateLimits: [] })
+  await $.session.measure({ context: { percent: 55 }, rateLimits: [] })
   const ui = await $.ui.mount({ plugin: 'usage', surface: 'terminal', component: 'AbovePrompt', requestId: 'compact-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
   return { ui, toasts, compactions: () => compactions }
 }
@@ -268,10 +268,9 @@ const compactBand = async (
 test('pressing compact runs /compact once and says nothing when it succeeds', async ($, on) => {
   on('session.measure', () => ({ changed: [] }))
   const { ui, toasts, compactions } = await compactBand($, on, () => ({ messages: [{ role: 'user', text: 'summary', toolUses: [] }] }))
-  expect(await ui.find({ type: 'Button', text: /compact/ })).toBeDefined()
-  // a Button is drawn in the surface's own style, so the segment's colour must
-  // stay on the Text beside it
-  expect((await ui.findAll({ type: 'Text' })).some(text => text.props.color === '#82B58B' && /^ctx/.test(text.text))).toBe(true)
+  expect(await ui.find({ type: 'Button', text: /ctx/ })).toBeDefined()
+  // the segment is the button and keeps its (yellow) colour on its Text
+  expect((await ui.findAll({ type: 'Text' })).some(text => text.props.color === '#C5A35B' && /^ctx/.test(text.text))).toBe(true)
   await ui.press({ plugin: 'usage', key: 'compact' })
   expect(compactions()).toBe(1)
   expect(toasts).toEqual([])
@@ -297,10 +296,10 @@ test('the compact button is gone while a request is in flight', async ($, on) =>
   const stream = $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: 1 })
   const drained = (async () => { for await (const _ of stream) { /* drain */ } })()
   for (let settles = 0; settles < 20; settles++) await Promise.resolve()
-  expect(await ui.find({ type: 'Button', text: /compact/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', text: /ctx/ })).toBeUndefined()
   release()
   await drained
-  expect(await ui.find({ type: 'Button', text: /compact/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: /ctx/ })).toBeDefined()
   await ui.unmount()
 })
 

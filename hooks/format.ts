@@ -12,8 +12,11 @@ export type Segment = {
   action?: { kind: 'compact' | 'warm'; label: string; isEnabled: boolean }
 }
 
-// From this context share on, an idle session is offered the compact button.
-export const COMPACT_FROM = 30
+// Usage turns yellow at WARN_AT and red at BAD_AT; ctx is pressable (compact)
+// from the first colour change on.
+const WARN_AT = 50
+const BAD_AT = 80
+export const COMPACT_FROM = WARN_AT
 // The Japanese hot-spring sign (U+2668). It is also an emoji, which some
 // terminals draw two cells wide: the band gives it a fixed two-cell box.
 export const WARM_SIGN = '♨'
@@ -45,7 +48,7 @@ export type LineInput = {
 }
 
 // Green <50, yellow <80, red after; shared by ctx and quota.
-const byUsed = (pct: number): Level => (pct >= 80 ? 'bad' : pct >= 50 ? 'warn' : 'ok')
+const byUsed = (pct: number): Level => (pct >= BAD_AT ? 'bad' : pct >= WARN_AT ? 'warn' : 'ok')
 
 // "3d04h" / "2h13m" / "45m"
 function duration(ms: number): string {
@@ -91,13 +94,9 @@ export function formatSegments(i: LineInput): Segment[] {
   if (i.contextPercent !== undefined) {
     const pct = Math.floor(i.contextPercent)
     const level = byUsed(pct)
-    if (i.canCompact && pct >= COMPACT_FROM) {
-      const label = level === 'bad' ? '→ compact or hand off' : '→ compact'
-      parts.push({ text: `ctx ${pct}%`, level, group: 'session', action: { kind: 'compact', label, isEnabled: true } })
-    } else {
-      const hint = level === 'bad' ? ' → /compact or hand off' : ''
-      parts.push({ text: `ctx ${pct}%${hint}`, level, group: 'session' })
-    }
+    // the segment itself is the button; the band draws it pressable
+    const action = i.canCompact && pct >= COMPACT_FROM ? { kind: 'compact' as const, label: 'compact', isEnabled: true } : undefined
+    parts.push({ text: `ctx ${pct}%`, level, group: 'session', ...(action && { action }) })
   }
 
   const c = i.cache
@@ -133,11 +132,11 @@ export function formatSegments(i: LineInput): Segment[] {
       const pct = Math.floor(w.percentUsed)
       const reset = untilReset(w.resetsAt, i.now)
       const p = pace(kind, w.percentUsed, w.resetsAt, i.now)
-      // the sign says how fast the window is being used; with no pace yet it
-      // is the plain reset sign
-      const sign = p !== undefined ? paceSign(p) : reset ? '↻' : ''
+      // the sign says how fast the window is being used; with no pace yet the
+      // 5h window shows the plain reset sign. 7d shows no reset time.
+      const sign = p !== undefined ? paceSign(p) : kind === 'five_hour' && reset ? '↻' : ''
       parts.push({
-        text: [`${label} ${pct}%`, sign, reset].filter(part => part !== undefined && part !== '').join(' '),
+        text: [`${label} ${pct}%`, sign, kind === 'five_hour' ? reset : undefined].filter(part => part !== undefined && part !== '').join(' '),
         level: byUsed(pct),
         group: 'quota',
       })

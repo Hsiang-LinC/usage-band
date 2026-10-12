@@ -1,6 +1,6 @@
 # usage-band
 
-Band above the prompt: ctx %, cache countdown (1h TTL) and hit rate, 5h/7d quota used with pace, colored by level (quota green <50%, yellow <80%, red after; cache green >20m, yellow ≤20m, red cold; ctx same, and from 80% suggests /compact or a handoff)
+Band above the prompt: ctx %, cache countdown (1h TTL) and hit rate, 5h/7d quota used with pace, colored by level (quota green <50%, yellow <80%, red after; cache green >20m, yellow ≤20m, red cold)
 
 ```bash
 claude plugin marketplace add Hsiang-LinC/usage-band
@@ -14,7 +14,7 @@ Test: `claude plugin test .`
 ## Pace
 
 5h and 7d compare the share used with the share of the window that has passed
-(from `resetsAt`) and show it as a sign where the reset sign used to be:
+(from `resetsAt`) and show it as a sign (5h puts its reset time after it; 7d shows the sign only):
 
 | sign | burn, against an even one |
 |---|---|
@@ -23,16 +23,14 @@ Test: `claude plugin test .`
 | `▴` | over a quarter faster |
 
 `5h 50% ▴ 2h10m` reads: half used, burning faster than even, 2h10m to reset.
-Until a tenth of the window has passed there is no pace: both show the plain
-`↻` reset sign.
+Until a tenth of the window has passed there is no pace: 5h shows the plain `↻`
+reset sign and 7d only its share.
 
 ## Pressing the band
 
-A Button is drawn in the surface's own style, so it cannot carry a segment's
-colour. The segments keep their colours as plain text, and the two actions sit
-beside them as buttons:
+Press (or click, where the terminal reports clicks) a figure that offers an action:
 
-- `ctx 45% → compact`: from 30% context, while no request is running. It runs
+- `ctx 55%`: from 50% context (the yellow threshold, so yellow and red alike), while no request is running, the figure itself is the button. It runs
   `/compact`; a refused or vetoed compact is shown as a toast. The cache then
   starts over (`cache --`), since the prefix has changed.
 - `cache 52m ♨ hit 90%`: the hot-spring sign is always there, in the place of the dot, so the band does not shift. Plain

@@ -38,8 +38,8 @@ Layout consequences found while building:
 
 ### 2. Compact button
 
-- Shown when `ctx ≥ 30%` (`COMPACT_BUTTON_FROM`, constant in `format.ts`) **and no request is in flight** (`pending` empty), because `compact()` rejects mid-turn.
-- Replaces the text hint at ≥80% (`→ /compact or hand off` becomes the button label plus the hand-off wording).
+- The ctx segment itself is the button (no separate label), pressable when `ctx ≥ 50%` (`COMPACT_FROM`, equal to the yellow threshold `WARN_AT` in `format.ts`) **and no request is in flight** (`pending` empty), because `compact()` rejects mid-turn.
+- The text hint at ≥80% (`→ /compact or hand off`) was removed with the label. Caveat: a terminal draws a Button's label in its own style, so the ctx colour may show on the desktop only.
 - Compacting changes the prefix, so the cached one no longer matches: the band drops back to `cache --` until the next request starts a new countdown. Label says `compact`, not "free space".
 - Rejection or `{ skip }` → `$.ui.toast` with the reason; no retry.
 
@@ -57,9 +57,9 @@ Layout consequences found while building:
 
 A used-% / time-to-reset toggle added nothing: 5h already shows both. What the API does not give is *how fast the burn is*. From the window length (5h, 7d), `resetsAt` and the used share:
 
-- `pace = used share / elapsed share` of the window; 1 is an even burn. It is shown as one sign before the reset time (`5h 50% ▴ 2h10m`; 7d shows its reset too): `▾` below 0.75, `▴` above 1.25, `~` between (not `·`, which already separates segments). Five arrows and a speedometer-needle idea were tried and dropped: the three small signs are narrower and clearer.
+- `pace = used share / elapsed share` of the window; 1 is an even burn. It is shown as one sign before the reset time (`5h 50% ▴ 2h10m`; 7d shows the sign only): `▾` below 0.75, `▴` above 1.25, `~` between (not `·`, which already separates segments). Five arrows and a speedometer-needle idea were tried and dropped: the three small signs are narrower and clearer.
 - A projection (`full in 1h00m`, with a yellow lift) was built and removed: the sign and the reset time are enough.
-- Nothing is shown until 10% of the window has passed (`MIN_ELAPSED`): earlier, the rate is noise. Both then keep the plain `↻` reset sign.
+- Nothing is shown until 10% of the window has passed (`MIN_ELAPSED`): earlier, the rate is noise. 5h then keeps `↻`; 7d shows its share only.
 - A press-for-detail toast (an `info` button for hit / 5h / 7d) was built and removed: the band already says what the toast repeated.
 
 ### 5. Compact vs detailed mode

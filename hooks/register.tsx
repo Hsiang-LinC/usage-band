@@ -267,8 +267,13 @@ export const register: Register = on => {
                 ? [<Text key={`sep-${i}`} color={theme.neutral}>{segments[i - 1].group === s.group ? '·' : '│'}</Text>]
                 : []),
               <Box key={`seg-${i}`} gap={1}>
-                {body(s)}
-                {s.action === undefined ? null : s.action.kind === 'warm' ? (
+                {s.action?.kind === 'compact' && s.action.isEnabled ? (
+                  // the segment is the button
+                  <Button key="compact" plain onPress={() => press($, 'compact')}>{body(s)}</Button>
+                ) : (
+                  body(s)
+                )}
+                {s.action === undefined || s.action.kind === 'compact' ? null : s.action.kind === 'warm' ? (
                   // a fixed cell: the sign is a different width where the font falls back
                   <Box width={2} flexShrink={0}>
                     {s.action.isEnabled ? (
@@ -279,8 +284,6 @@ export const register: Register = on => {
                       <Text>{s.action.label}</Text>
                     )}
                   </Box>
-                ) : s.action.isEnabled ? (
-                  <Button key={s.action.kind} plain onPress={() => press($, s.action!.kind)}>{s.action.label}</Button>
                 ) : null}
               </Box>,
             ])}
