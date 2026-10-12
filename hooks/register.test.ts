@@ -53,20 +53,6 @@ for (const surface of ['terminal', 'desktop'] as const) {
   })
 }
 
-test('pressing info toasts the 5h detail', async ($, on) => {
-  mock.clock(on)
-  engineBand(on)
-  const toasts: string[] = []
-  on('ui.toast', (_$, e) => { toasts.push(e.text); return { value: undefined } })
-  on('session.measure', () => ({ changed: [] }))
-  on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
-  await $.session.measure({ context: { percent: 32 }, rateLimits: [{ kind: 'five_hour', percentUsed: 86 }] })
-  const ui = await $.ui.mount({ plugin: 'usage', surface: 'terminal', component: 'AbovePrompt', requestId: 'press-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
-  await ui.press({ plugin: 'usage', key: 'info' })
-  expect(toasts).toEqual(['5h 86% used'])
-  await ui.unmount()
-})
-
 for (const appearance of ['light', 'dark'] as const) {
   test(`auto uses macOS ${appearance} appearance and caches detection`, async ($, on) => {
     const clock = mock.clock(on)
@@ -256,30 +242,6 @@ test('keeps the drawing beneath under the usage row', async ($, on) => {
   const root = await ui.drawn()
   expect(root.props).toMatchObject({ flexDirection: 'column' })
   expect(root.children).toMatchObject([{ type: 'Box' }, { type: 'Text', children: ['another mod'] }])
-  await ui.unmount()
-})
-
-test('pressing info toasts the hit detail: the newest request and the session', async ($, on) => {
-  mock.clock(on)
-  engineBand(on)
-  const toasts: string[] = []
-  on('ui.toast', (_$, e) => { toasts.push(e.text); return { value: undefined } })
-  on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
-  let cacheRead = 0
-  on('turn.step', async function* (_$, e) {
-    return {
-      turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: 'end_turn' as const,
-      usage: { model: e.model, input_tokens: 100, output_tokens: 1, cache_read_input_tokens: cacheRead, cache_creation_input_tokens: 900 - cacheRead },
-    }
-  })
-  for (const [index, read] of [0, 900].entries()) {
-    cacheRead = read
-    for await (const _ of $.turn.step({ turnId: 't', index, model: 'm', messageCount: 1 })) { /* drain */ }
-  }
-  const ui = await $.ui.mount({ plugin: 'usage', surface: 'terminal', component: 'AbovePrompt', requestId: 'hit-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
-  await ui.press({ plugin: 'usage', key: 'info' })
-  // the session: (0 + 900) cache reads of (1000 + 1000) input tokens
-  expect(toasts).toEqual(['hit 90% on the newest request (read 900 · written 0 · uncached 100 tokens) · 45% across the session'])
   await ui.unmount()
 })
 

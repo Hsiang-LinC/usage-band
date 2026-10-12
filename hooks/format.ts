@@ -2,13 +2,12 @@ export const CACHE_TTL_MS = 60 * 60 * 1000
 
 export type Level = 'ok' | 'warn' | 'bad' | 'none'
 // session: ctx and cache; quota: 5h and 7d. The band separates the two groups.
-// `detail` is what the band's info button shows for this segment; `action` is a
-// button drawn after the segment (a Button cannot carry the segment's colours).
+// `action` is a button drawn after the segment (a Button cannot carry the
+// segment's colours).
 export type Segment = {
   text: string
   level: Level
   group: 'session' | 'quota'
-  detail?: string
   action?: { kind: 'compact' | 'warm'; label: string }
 }
 
@@ -31,8 +30,6 @@ export type LineInput = {
     sentAt: number
     // Figures of the newest request that answered; absent while none has.
     usage?: Usage
-    // Sum over every answered main-thread request, for the hit detail.
-    total?: Usage
   }
   now: number
 }
@@ -62,8 +59,15 @@ const hitPercent = (u: Usage | undefined): number | undefined => {
 const WINDOW_MS = { five_hour: 5 * 3_600_000, seven_day: 7 * 86_400_000 } as const
 // Too little of a window has passed for its burn rate to say anything.
 const MIN_ELAPSED = 0.1
-const AHEAD = 1.25
-const BEHIND = 0.75
+// Pace ratio (1 is an even burn) to the arrow that shows it, slowest first.
+const PACE_ARROWS = [
+  [0.5, '↓'],
+  [0.75, '↘'],
+  [1.25, '→'],
+  [2, '↗'],
+  [Infinity, '↑'],
+] as const
+const paceArrow = (ratio: number) => PACE_ARROWS.find(([below]) => ratio < below || below === Infinity)![1]
 
 type Pace = {
   // used share over elapsed share of the window: 1 is an even burn
@@ -119,16 +123,7 @@ export function formatSegments(i: LineInput): Segment[] {
         action: i.canWarm ? { kind: 'warm', label: '→ warm' } : undefined,
       })
       const hit = hitPercent(c.usage)
-      if (hit !== undefined && c.usage) {
-        const u = c.usage
-        const all = hitPercent(c.total)
-        parts.push({
-          text: `hit ${hit}%`,
-          level,
-          group: 'session',
-          detail: `hit ${hit}% on the newest request (read ${u.cacheRead} · written ${u.cacheWrite} · uncached ${u.input} tokens)${all === undefined ? '' : ` · ${all}% across the session`}`,
-        })
-      }
+      if (hit !== undefined) parts.push({ text: `hit ${hit}%`, level, group: 'session' })
     }
   }
 
@@ -141,20 +136,20 @@ export function formatSegments(i: LineInput): Segment[] {
       const pct = Math.floor(w.percentUsed)
       const reset = untilReset(w.resetsAt, i.now)
       const p = pace(kind, w.percentUsed, w.resetsAt, i.now)
-      const marker = p === undefined ? '' : p.ratio > AHEAD ? '▴' : p.ratio < BEHIND ? '▾' : ''
-      const full = p?.fullIn === undefined ? '' : ` → full ${duration(p.fullIn)}`
+      // the arrow says how fast the window is being used; with no pace yet the
+      // 5h window keeps the plain reset sign, and 7d shows nothing
+      const sign = p !== undefined ? paceArrow(p.ratio) : kind === 'five_hour' && reset ? '↻' : ''
       const base = byUsed(pct)
       parts.push({
-        text: `${label} ${pct}%${marker}${kind === 'five_hour' && reset ? ` ↻ ${reset}` : ''}${full}`,
+        text: [
+          `${label} ${pct}%`,
+          sign,
+          kind === 'five_hour' ? reset : undefined,
+          p?.fullIn === undefined ? undefined : `full in ${duration(p.fullIn)}`,
+        ].filter(part => part !== undefined && part !== '').join(' '),
         // running out before the reset is worth a yellow even while the share is low
         level: p?.fullIn !== undefined && base === 'ok' ? 'warn' : base,
         group: 'quota',
-        detail: [
-          `${label} ${pct}% used`,
-          reset === undefined ? undefined : `resets in ${reset}`,
-          p === undefined ? undefined : `pace ${p.ratio.toFixed(1)}x an even burn`,
-          p?.fullIn === undefined ? undefined : `full in ${duration(p.fullIn)}`,
-        ].filter(part => part !== undefined).join(' · '),
       })
     }
   }

@@ -8,8 +8,6 @@ let answered: { sentAt: number; usage: CacheUsage } | undefined
 // main-thread requests in flight, by identity (two may share a millisecond);
 // the icon grows only while this is non-empty
 const pending = new Set<{ sentAt: number }>()
-// every answered main-thread request's usage summed, for the hit detail
-let total: CacheUsage | undefined
 // when the newest keep-warm request was sent: like any request, it restarts
 // the cache's TTL
 let warmedAt: number | undefined
@@ -131,7 +129,7 @@ function cacheState(): LineInput['cache'] {
     if (sentAt === undefined || request.sentAt > sentAt) sentAt = request.sentAt
   }
   if (warmedAt !== undefined && (sentAt === undefined || warmedAt > sentAt)) sentAt = warmedAt
-  return sentAt === undefined ? undefined : { sentAt, usage: answered?.usage, total }
+  return sentAt === undefined ? undefined : { sentAt, usage: answered?.usage }
 }
 
 // A minute ticker phased on the countdown's start, so the band redraws
@@ -196,11 +194,6 @@ export const register: Register = on => {
           cacheRead: r.usage.cache_read_input_tokens,
           cacheWrite: r.usage.cache_creation_input_tokens,
         }
-        total = {
-          input: (total?.input ?? 0) + usage.input,
-          cacheRead: (total?.cacheRead ?? 0) + usage.cacheRead,
-          cacheWrite: (total?.cacheWrite ?? 0) + usage.cacheWrite,
-        }
         if (answered === undefined || request.sentAt >= answered.sentAt) {
           answered = { sentAt: request.sentAt, usage }
         }
@@ -232,8 +225,6 @@ export const register: Register = on => {
       now,
     })
     if (segments.length === 0) return next(e)
-    // the info button shows every segment's detail at once
-    const details = segments.flatMap(s => (s.detail === undefined ? [] : [s.detail])).join('\n')
 
     // other mods share the band (vault-jot adds its row), so draw on top of
     // what lies beneath rather than in its place
@@ -271,9 +262,6 @@ export const register: Register = on => {
                 )}
               </Box>,
             ])}
-            {details === '' ? null : (
-              <Button key="info" plain dimColor onPress={() => $.ui.toast(details)}>info</Button>
-            )}
           </Box>
         </Box>
         {beneath}
