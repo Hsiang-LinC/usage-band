@@ -1,9 +1,9 @@
 {
   "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
   "name": "usage-band",
-  "description": "Band above the prompt: ctx %, cache countdown (1h TTL) and hit rate, 5h/7d quota used with pace, colored by level; press ctx to compact, cache to keep it warm, quota or hit for details",
+  "description": "Band above the prompt: ctx %, cache countdown (1h TTL) and hit rate, 5h/7d quota used with pace, colored by level; press ctx to compact, ♨ to keep the cache warm",
   "owner": { "name": "Hsiang-Lin Chan" },
   "plugins": [
-    { "name": "usage", "description": "Band above the prompt: ctx %, cache countdown (1h TTL) and hit rate, 5h/7d quota used with pace, colored by level; press ctx to compact, cache to keep it warm, quota or hit for details", "source": "./", "category": "productivity" }
+    { "name": "usage", "description": "Band above the prompt: ctx %, cache countdown (1h TTL) and hit rate, 5h/7d quota used with pace, colored by level; press ctx to compact, ♨ to keep the cache warm", "source": "./", "category": "productivity" }
   ]
 }
