@@ -2,8 +2,17 @@ export const CACHE_TTL_MS = 60 * 60 * 1000
 
 export type Level = 'ok' | 'warn' | 'bad' | 'none'
 // session: ctx and cache; quota: 5h and 7d. The band separates the two groups.
-// detail: what pressing the segment shows; absent means it is not pressable.
-export type Segment = { text: string; level: Level; group: 'session' | 'quota'; detail?: string }
+// Pressable when it has either: `detail` is shown on press, `action` is run.
+export type Segment = {
+  text: string
+  level: Level
+  group: 'session' | 'quota'
+  detail?: string
+  action?: 'compact'
+}
+
+// From this context share on, an idle session is offered the compact button.
+export const COMPACT_FROM = 30
 
 type Usage = { input: number; cacheRead: number; cacheWrite: number }
 
@@ -11,6 +20,8 @@ export type LineInput = {
   contextPercent?: number
   rateLimits: { kind: string; percentUsed: number; resetsAt?: string }[]
   // Absent until a main-thread request has been sent.
+  // Whether /compact can run now: it is refused while a request is in flight.
+  canCompact?: boolean
   cache?: {
     // When the newest counted request was sent (ms): the TTL restarts when a
     // request reads or writes the cache, not when its response ends.
@@ -78,8 +89,13 @@ export function formatSegments(i: LineInput): Segment[] {
   if (i.contextPercent !== undefined) {
     const pct = Math.floor(i.contextPercent)
     const level = byUsed(pct)
-    const hint = level === 'bad' ? ' → /compact or hand off' : ''
-    parts.push({ text: `ctx ${pct}%${hint}`, level, group: 'session' })
+    if (i.canCompact && pct >= COMPACT_FROM) {
+      const handOff = level === 'bad' ? ' or hand off' : ''
+      parts.push({ text: `ctx ${pct}% → compact${handOff}`, level, group: 'session', action: 'compact' })
+    } else {
+      const hint = level === 'bad' ? ' → /compact or hand off' : ''
+      parts.push({ text: `ctx ${pct}%${hint}`, level, group: 'session' })
+    }
   }
 
   const c = i.cache

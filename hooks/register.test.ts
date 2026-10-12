@@ -282,3 +282,56 @@ test('pressing hit toasts the newest request and the session', async ($, on) => 
   expect(toasts).toEqual(['hit 90% on the newest request (read 900 · written 0 · uncached 100 tokens) · 45% across the session'])
   await ui.unmount()
 })
+
+const compactBand = async (
+  $: Parameters<Parameters<typeof test>[1]>[0],
+  on: Parameters<Parameters<typeof test>[1]>[1],
+  compacting: () => unknown,
+) => {
+  mock.clock(on)
+  engineBand(on)
+  const toasts: string[] = []
+  let compactions = 0
+  on('ui.toast', (_$, e) => { toasts.push(e.text); return { value: undefined } })
+  on('session.compact', () => { compactions++; return compacting() as never })
+  on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
+  await $.session.measure({ context: { percent: 45 }, rateLimits: [] })
+  const ui = await $.ui.mount({ plugin: 'usage', surface: 'terminal', component: 'AbovePrompt', requestId: 'compact-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
+  return { ui, toasts, compactions: () => compactions }
+}
+
+test('pressing compact runs /compact once and says nothing when it succeeds', async ($, on) => {
+  on('session.measure', () => ({ changed: [] }))
+  const { ui, toasts, compactions } = await compactBand($, on, () => ({ messages: [{ role: 'user', text: 'summary', toolUses: [] }] }))
+  expect(await ui.find({ type: 'Button', text: /compact/ })).toBeDefined()
+  await ui.press({ plugin: 'usage', key: 'seg-0' })
+  expect(compactions()).toBe(1)
+  expect(toasts).toEqual([])
+  await ui.unmount()
+})
+
+test('a vetoed or refused compact tells the person why', async ($, on) => {
+  on('session.measure', () => ({ changed: [] }))
+  const { ui, toasts } = await compactBand($, on, () => ({ skip: 'blocked by a hook' }))
+  await ui.press({ plugin: 'usage', key: 'seg-0' })
+  expect(toasts).toEqual(['compact skipped: blocked by a hook'])
+  await ui.unmount()
+})
+
+test('the compact button is gone while a request is in flight', async ($, on) => {
+  on('session.measure', () => ({ changed: [] }))
+  let release: () => void = () => {}
+  on('turn.step', async function* (_$, e) {
+    await new Promise<void>(resolve => { release = resolve })
+    return { turnId: e.turnId, index: e.index, answer: '', toolUses: [], stopReason: null }
+  })
+  const { ui } = await compactBand($, on, () => ({ messages: [{ role: 'user', text: 'summary', toolUses: [] }] }))
+  const stream = $.turn.step({ turnId: 't', index: 0, model: 'm', messageCount: 1 })
+  const drained = (async () => { for await (const _ of stream) { /* drain */ } })()
+  for (let settles = 0; settles < 20; settles++) await Promise.resolve()
+  expect(await ui.find({ type: 'Button', text: /compact/ })).toBeUndefined()
+  release()
+  await drained
+  expect(await ui.find({ type: 'Button', text: /compact/ })).toBeDefined()
+  await ui.unmount()
+})

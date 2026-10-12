@@ -175,3 +175,16 @@ test('only quota and hit are pressable', () => {
   }).filter(s => s.detail !== undefined).map(s => s.text.split(' ')[0])
   expect(pressable).toEqual(['hit', '5h'])
 })
+
+test('the compact button appears from 30% context, only while idle', () => {
+  const ctx = (contextPercent: number, canCompact?: boolean) =>
+    formatSegments({ contextPercent, rateLimits: [], canCompact, now: 0 })[0]
+  expect(ctx(29, true)).toMatchObject({ text: 'ctx 29%' })
+  expect(ctx(29, true).action).toBeUndefined()
+  expect(ctx(30, true)).toMatchObject({ text: 'ctx 30% → compact', action: 'compact', level: 'ok' })
+  expect(ctx(85, true)).toMatchObject({ text: 'ctx 85% → compact or hand off', action: 'compact', level: 'bad' })
+  // a request in flight: /compact would be refused, so the plain text stays
+  expect(ctx(50, false)).toMatchObject({ text: 'ctx 50%' })
+  expect(ctx(50, false).action).toBeUndefined()
+  expect(ctx(85, false).text).toBe('ctx 85% → /compact or hand off')
+})

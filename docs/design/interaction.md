@@ -37,7 +37,7 @@ Layout consequence found while building: a `Button` is refused inside an inline 
 
 - Shown when `ctx ≥ 30%` (`COMPACT_BUTTON_FROM`, constant in `format.ts`) **and no request is in flight** (`pending` empty), because `compact()` rejects mid-turn.
 - Replaces the text hint at ≥80% (`→ /compact or hand off` becomes the button label plus the hand-off wording).
-- Compacting makes the cache cold; the band will show red "cold" afterwards. Expected, not a bug. Label says `compact`, not "free space".
+- Compacting changes the prefix, so the cached one no longer matches: the band drops back to `cache --` until the next request starts a new countdown. Label says `compact`, not "free space".
 - Rejection or `{ skip }` → `$.ui.toast` with the reason; no retry.
 
 ### 3. Keep-warm button
@@ -82,7 +82,7 @@ Slice 2 needs none: presses are toasts. Persistence (`$.store`, a single `setVie
 
 1. Plumbing: `Segment.detail`, `Button` wrapper, flex-row band (done). Verify on **terminal and desktop**: desktop trims whitespace at flex-item edges, so spacing comes from `gap`.
 2. Pace / full-in on 5h and 7d, and press-for-detail on quota and hit (done).
-3. Compact button.
+3. Compact button (done).
 4. Detailed mode (second line) and the layout pass.
 5. Keep-warm, after the TTL question above is verified.
 

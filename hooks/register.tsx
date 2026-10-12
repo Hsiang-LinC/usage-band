@@ -66,6 +66,24 @@ async function palette($: EngineInterface) {
 
 const redraw = ($: EngineInterface) => $.ui.invalidate('ui.render')
 
+// The same call /compact makes. It is refused while a request runs (the band
+// offers it only when idle, but the press can land just after one starts);
+// either way the person is told, and nothing is retried.
+async function compact($: EngineInterface) {
+  try {
+    const r = await $.session.compact()
+    if (r.skip !== undefined) return void $.ui.toast(`compact skipped: ${r.skip}`)
+  } catch (error) {
+    return void $.ui.toast(`compact failed: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  // the compacted transcript is a new prefix: what was cached no longer
+  // matches, so the next request starts the countdown afresh
+  answered = undefined
+  tick?.cancel()
+  tick = undefined
+  redraw($)
+}
+
 // The countdown runs from the newest request sent, answered or still in
 // flight; the hit rate is the newest answered one's.
 function cacheState(): LineInput['cache'] {
@@ -168,6 +186,7 @@ export const register: Register = on => {
       contextPercent,
       rateLimits,
       cache: cacheState(),
+      canCompact: pending.size === 0,
       now: await $.clock.now(),
     })
     if (segments.length === 0) return next(e)
@@ -187,17 +206,14 @@ export const register: Register = on => {
       </Text>
     )
     // A Button draws its Text children itself, so the colour sits on each of
-    // them: a Text nested inside a Text loses it there.
-    const buttonParts = (s: (typeof segments)[number]) => {
-      const at = s.text.indexOf(' ')
-      return [
-        <Text key="label" color={theme.colors[s.level]}>{s.text.slice(0, at)}</Text>,
-        ' ',
-        ...s.text.slice(at + 1).split(/(<?\d+(?:[dh]\d+)?[dhm%])/).filter(text => text !== '').map((text, j) => (
-          <Text key={String(j)} color={theme.colors[s.level]} bold={/^(<?\d+(?:[dh]\d+)?[dhm%])$/.test(text)}>{text}</Text>
-        )),
-      ]
-    }
+    // them: a Text nested inside a Text loses it there. Spaces stay out of the
+    // Text children, as strings, so no Text begins or ends with whitespace.
+    const buttonParts = (s: (typeof segments)[number]) =>
+      s.text.split(/(<?\d+(?:[dh]\d+)?[dhm%])|( )/).filter(text => text !== undefined && text !== '').map((text, j) =>
+        text === ' ' ? ' ' : (
+          <Text key={String(j)} color={theme.colors[s.level]} bold={/^<?\d+(?:[dh]\d+)?[dhm%]$/.test(text)}>{text}</Text>
+        ),
+      )
     return (
       <Box flexDirection="column">
         <Box paddingX={1}>
@@ -213,10 +229,10 @@ export const register: Register = on => {
               ...(i > 0
                 ? [<Text key={`sep-${i}`} color={theme.neutral}>{segments[i - 1].group === s.group ? '·' : '│'}</Text>]
                 : []),
-              s.detail === undefined ? (
+              s.detail === undefined && s.action === undefined ? (
                 <Box key={`seg-${i}`}>{body(s)}</Box>
               ) : (
-                <Button key={`seg-${i}`} plain onPress={() => $.ui.toast(s.detail!)}>{buttonParts(s)}</Button>
+                <Button key={`seg-${i}`} plain onPress={() => (s.action === 'compact' ? compact($) : $.ui.toast(s.detail!))}>{buttonParts(s)}</Button>
               ),
             ])}
           </Box>
