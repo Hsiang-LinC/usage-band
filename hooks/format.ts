@@ -14,8 +14,12 @@ export type Segment = {
 
 // From this context share on, an idle session is offered the compact button.
 export const COMPACT_FROM = 30
-// Hot-spring sign, text presentation (U+FE0E) so it takes the band's colours.
-export const WARM_SIGN = '♨\uFE0E'
+// Steam over a cup. Not the hot-spring sign U+2668: that one is also an emoji,
+// which some terminals draw two cells wide (and in colour) in a one-cell slot.
+export const WARM_SIGN = '≋'
+// The cache segment turns yellow with this long left: a simple threshold, so
+// nothing needs drawing at the moment it is crossed beyond the minute tick.
+export const CACHE_WARN_MS = 20 * 60_000
 
 type Usage = { input: number; cacheRead: number; cacheWrite: number }
 
@@ -116,7 +120,7 @@ export function formatSegments(i: LineInput): Segment[] {
     } else {
       const text =
         remaining < 60_000 ? 'cache <1m' : `cache ${Math.floor(remaining / 60_000)}m`
-      const level: Level = remaining > 5 * 60_000 ? 'ok' : 'warn'
+      const level: Level = remaining > CACHE_WARN_MS ? 'ok' : 'warn'
       parts.push({
         text,
         level,

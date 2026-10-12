@@ -41,7 +41,9 @@ test('levels follow usage and remaining cache time', () => {
       now,
     })
   expect(seg(0, 10).map(s => s.level)).toEqual(['ok', 'ok'])
-  expect(seg(50 * 60_000, 70).map(s => s.level)).toEqual(['ok', 'warn'])
+  expect(seg(30 * 60_000, 70).map(s => s.level)).toEqual(['ok', 'warn'])
+  // yellow once 20 minutes or fewer are left
+  expect(seg(40 * 60_000, 10).map(s => s.level)).toEqual(['warn', 'ok'])
   expect(seg(56 * 60_000, 80).map(s => s.level)).toEqual(['warn', 'bad'])
   expect(seg(61 * 60_000, 49).map(s => s.level)).toEqual(['bad', 'ok'])
 })
@@ -176,9 +178,11 @@ test('the compact button appears from 30% context, only while idle', () => {
 test('the keep-warm sign is always there; it is live only for a warm cache that can take a request', () => {
   const cache = (minutesLeft: number, canWarm?: boolean) =>
     formatSegments({ rateLimits: [], cache: { sentAt: 0 }, canWarm, now: (60 - minutesLeft) * 60_000 })[0]
-  const live = { kind: 'warm', label: '♨\uFE0E', isEnabled: true }
+  const live = { kind: 'warm', label: '≋', isEnabled: true }
   expect(cache(59, true)).toMatchObject({ text: 'cache 59m', level: 'ok', action: live })
-  // the colour of the cache segment is what turns as the end nears
+  // the colour of the cache segment is what turns as the end nears: one threshold
+  expect(cache(21, true)).toMatchObject({ text: 'cache 21m', level: 'ok' })
+  expect(cache(20, true)).toMatchObject({ text: 'cache 20m', level: 'warn' })
   expect(cache(5, true)).toMatchObject({ text: 'cache 5m', level: 'warn', action: live })
   expect(cache(0.5, true)).toMatchObject({ text: 'cache <1m', level: 'warn', action: live })
   // a request in flight or one just sent: the sign stays, inert

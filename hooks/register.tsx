@@ -145,11 +145,21 @@ function phaseTicker($: EngineInterface, now: number) {
   })
 }
 
+// Redraws only when something shown can have changed: the figures, or the
+// minute (the countdowns tick in minutes). The 5s poll would otherwise redraw
+// an idle band twelve times a minute.
+let drawnMinute: number | undefined
 async function refreshUsage($: EngineInterface) {
   const u = await $.session.usage()
+  const minute = Math.floor((await $.clock.now()) / 60_000)
+  const isChanged =
+    u.context.percent !== contextPercent ||
+    JSON.stringify(u.rateLimits) !== JSON.stringify(rateLimits) ||
+    minute !== drawnMinute
   contextPercent = u.context.percent
   rateLimits = u.rateLimits
-  redraw($)
+  drawnMinute = minute
+  if (isChanged) redraw($)
 }
 
 export const register: Register = on => {
@@ -259,7 +269,7 @@ export const register: Register = on => {
                 {body(s)}
                 {s.action === undefined ? null : s.action.kind === 'warm' ? (
                   // a fixed cell: the sign is a different width where the font falls back
-                  <Box width={2} flexShrink={0}>
+                  <Box width={3} flexShrink={0}>
                     {s.action.isEnabled ? (
                       <Button key="warm" plain onPress={() => press($, 'warm')}>{s.action.label}</Button>
                     ) : (

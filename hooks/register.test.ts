@@ -26,9 +26,9 @@ for (const surface of ['terminal', 'desktop'] as const) {
       // the icon's frames differ in glyph width, so a fixed cell keeps the text after it still
       const icon = (await ui.findAll({ type: 'Box' })).filter(box => box.props.width !== undefined)
       // the star's cell, then the keep-warm sign's: inert and dim before any request
-      expect(icon.map(box => box.props)).toMatchObject([{ width: 2, flexShrink: 0 }, { width: 2, flexShrink: 0 }])
+      expect(icon.map(box => box.props)).toMatchObject([{ width: 2, flexShrink: 0 }, { width: 3, flexShrink: 0 }])
       expect(icon[0].children).toMatchObject([{ type: 'Text', children: ['✶'] }])
-      expect(icon[1].children).toMatchObject([{ type: 'Text', props: { dimColor: true }, children: ['♨\uFE0E'] }])
+      expect(icon[1].children).toMatchObject([{ type: 'Text', props: { dimColor: true }, children: ['≋'] }])
       await ui.unmount()
     })
   }
@@ -361,9 +361,9 @@ test('a failed keep-warm is toasted and leaves the countdown alone', async ($, o
 test('the keep-warm button waits out a cooldown after a press', async ($, on) => {
   const { ui, forks, clock } = await warmBand($, on, () => answered(45_000, 0), 52)
   await ui.press({ plugin: 'usage', key: 'warm' })
-  expect(await ui.find({ type: 'Button', text: /♨/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', text: /≋/ })).toBeUndefined()
   await clock.advance(31_000)
-  expect(await ui.find({ type: 'Button', text: /♨/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: /≋/ })).toBeDefined()
   await ui.press({ plugin: 'usage', key: 'warm' })
   expect(forks()).toBe(2)
   await ui.unmount()
@@ -371,6 +371,35 @@ test('the keep-warm button waits out a cooldown after a press', async ($, on) =>
 
 test('the keep-warm button is there from the first minute, not only near the end', async ($, on) => {
   const { ui } = await warmBand($, on, () => answered(45_000, 0), 1)
-  expect(await ui.find({ type: 'Button', text: /♨/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: /≋/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the 5s poll redraws only when a figure or the minute changed', async ($, on) => {
+  const clock = mock.clock(on)
+  let renders = 0
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e) => {
+    renders++
+    return $.ui.resolve(e).Box({ key: 'engine' })
+  })
+  let percent = 10
+  on('session.start', () => ({ cwd: '/' }))
+  on('session.usage', () => ({ value: { startedAt: 0, context: { percent }, rateLimits: [], cost: {} } as never }))
+  on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
+  await $.session.start({ cwd: '/', surface: 'terminal', isInteractive: true })
+  const ui = await $.ui.mount({ plugin: 'usage', surface: 'terminal', component: 'AbovePrompt', requestId: 'poll-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
+  await clock.advance(5_000)
+  const settled = renders
+  // still inside the same minute, nothing changed: no redraw
+  await clock.advance(30_000)
+  expect(renders).toBe(settled)
+  // a figure changed: redrawn at the next poll
+  percent = 20
+  await clock.advance(5_000)
+  expect(renders).toBeGreaterThan(settled)
+  // the minute turned: redrawn though nothing else changed
+  const afterChange = renders
+  await clock.advance(60_000)
+  expect(renders).toBeGreaterThan(afterChange)
   await ui.unmount()
 })
