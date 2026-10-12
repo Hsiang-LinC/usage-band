@@ -19,7 +19,7 @@ Test: `claude plugin test .`
 | sign | burn, against an even one |
 |---|---|
 | `▾` | under three quarters |
-| `▪` | about even |
+| `•` | about even |
 | `▴` | over a quarter faster |
 
 `5h 50% ▴ 2h10m` reads: half used, burning faster than even, 2h10m to reset.

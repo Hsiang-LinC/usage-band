@@ -73,12 +73,12 @@ const WINDOW_MS = { five_hour: 5 * 3_600_000, seven_day: 7 * 86_400_000 } as con
 // Too little of a window has passed for its burn rate to say anything.
 const MIN_ELAPSED = 0.1
 // Pace ratio (1 is an even burn) under SLOW or over FAST is marked; between,
-// the plain sign. A small square rather than `~` or `·` (the separator):
-// it shares the triangles' size and weight. Before a pace exists, 5h shows a
-// hollow dot of the same size.
+// the plain sign. A small solid dot rather than `~` or `·` (the
+// separator): it shares the triangles' size and weight. Before a pace exists,
+// 5h shows the hollow version of the same dot.
 const SLOW = 0.75
 const FAST = 1.25
-const paceSign = (ratio: number) => (ratio < SLOW ? '▾' : ratio > FAST ? '▴' : '▪')
+const paceSign = (ratio: number) => (ratio < SLOW ? '▾' : ratio > FAST ? '▴' : '•')
 
 // Used share over elapsed share of the window: 1 is an even burn.
 function pace(kind: keyof typeof WINDOW_MS, percentUsed: number, resetsAt: string | undefined, now: number): number | undefined {

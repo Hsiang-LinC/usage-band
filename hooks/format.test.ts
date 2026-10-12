@@ -118,9 +118,9 @@ test('the sign shows how fast the window is being used: slow, even or fast', () 
   const sign = (pct: number, elapsed: number) => formatLine(five(pct, elapsed)).replace(/^cache -- · 5h \d+% (\S).*$/, '$1')
   expect(sign(10, 2.5 * HOUR)).toBe('▾') // 0.2x
   expect(sign(30, 2.5 * HOUR)).toBe('▾') // 0.6x
-  expect(sign(40, 2.5 * HOUR)).toBe('▪') // 0.8x
-  expect(sign(50, 2.5 * HOUR)).toBe('▪') // 1x
-  expect(sign(62, 2.5 * HOUR)).toBe('▪') // 1.24x
+  expect(sign(40, 2.5 * HOUR)).toBe('•') // 0.8x
+  expect(sign(50, 2.5 * HOUR)).toBe('•') // 1x
+  expect(sign(62, 2.5 * HOUR)).toBe('•') // 1.24x
   expect(sign(70, 2.5 * HOUR)).toBe('▴') // 1.4x
   expect(sign(50, HOUR)).toBe('▴') // 2.5x
 })
@@ -138,7 +138,7 @@ test('the weekly window gets the sign, but no reset time', () => {
     now: 0,
   })[1].text
   expect(text(90, 24 * HOUR)).toBe('7d 90% ▴')
-  expect(text(50, 3.5 * 24 * HOUR)).toBe('7d 50% ▪')
+  expect(text(50, 3.5 * 24 * HOUR)).toBe('7d 50% •')
   // too early in the week for a pace: nothing but the share
   expect(text(5, 6 * HOUR)).toBe('7d 5%')
 })
