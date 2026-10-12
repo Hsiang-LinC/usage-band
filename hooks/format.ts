@@ -20,6 +20,9 @@ export const WARM_SIGN = '≋'
 // The cache segment turns yellow with this long left: a simple threshold, so
 // nothing needs drawing at the moment it is crossed beyond the minute tick.
 export const CACHE_WARN_MS = 20 * 60_000
+// The warm sign is live (red, pressable) with less than this left; before that
+// it is the same sign, uncoloured and inert.
+export const WARM_FROM_MS = 30 * 60_000
 
 type Usage = { input: number; cacheRead: number; cacheWrite: number }
 
@@ -109,7 +112,7 @@ export function formatSegments(i: LineInput): Segment[] {
   }
 
   const c = i.cache
-  // always drawn: only a warm cache with an idle session can take the request
+  // always drawn: live only for a warm cache under 30 minutes, with an idle session
   const warm = (isEnabled: boolean) => ({ kind: 'warm' as const, label: WARM_SIGN, isEnabled })
   if (c === undefined) {
     parts.push({ text: 'cache --', level: 'none', group: 'session', action: warm(false) })
@@ -125,7 +128,7 @@ export function formatSegments(i: LineInput): Segment[] {
         text,
         level,
         group: 'session',
-        action: warm(i.canWarm === true),
+        action: warm(i.canWarm === true && remaining < WARM_FROM_MS),
       })
       const hit = hitPercent(c.usage)
       if (hit !== undefined) parts.push({ text: `hit ${hit}%`, level, group: 'session' })

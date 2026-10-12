@@ -25,10 +25,11 @@ for (const surface of ['terminal', 'desktop'] as const) {
       expect((await ui.find({ type: 'Text', text: /^86%$/ }))?.props).toMatchObject({ bold: true })
       // the icon's frames differ in glyph width, so a fixed cell keeps the text after it still
       const icon = (await ui.findAll({ type: 'Box' })).filter(box => box.props.width !== undefined)
-      // the star's cell, then the keep-warm sign's: inert and dim before any request
+      // the star's cell, then the keep-warm sign's: inert and uncoloured before any request
       expect(icon.map(box => box.props)).toMatchObject([{ width: 2, flexShrink: 0 }, { width: 3, flexShrink: 0 }])
       expect(icon[0].children).toMatchObject([{ type: 'Text', children: ['✶'] }])
-      expect(icon[1].children).toMatchObject([{ type: 'Text', props: { dimColor: true }, children: ['≋'] }])
+      expect(icon[1].children).toMatchObject([{ type: 'Text', children: ['≋'] }])
+      expect((await ui.find({ type: 'Text', text: /^≋$/ }))?.props.color).toBeUndefined()
       await ui.unmount()
     })
   }
@@ -358,8 +359,9 @@ test('a failed keep-warm is toasted and leaves the countdown alone', async ($, o
   await ui.unmount()
 })
 
+// (a successful press leaves a fresh cache, so the sign goes inert on its own; the cooldown is for a press that failed)
 test('the keep-warm button waits out a cooldown after a press', async ($, on) => {
-  const { ui, forks, clock } = await warmBand($, on, () => answered(45_000, 0), 52)
+  const { ui, forks, clock } = await warmBand($, on, () => ({ isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: {} }), 52)
   await ui.press({ plugin: 'usage', key: 'warm' })
   expect(await ui.find({ type: 'Button', text: /≋/ })).toBeUndefined()
   await clock.advance(31_000)
@@ -369,9 +371,14 @@ test('the keep-warm button waits out a cooldown after a press', async ($, on) =>
   await ui.unmount()
 })
 
-test('the keep-warm button is there from the first minute, not only near the end', async ($, on) => {
-  const { ui } = await warmBand($, on, () => answered(45_000, 0), 1)
-  expect(await ui.find({ type: 'Button', text: /≋/ })).toBeDefined()
+test('the keep-warm sign is the same glyph, inert and uncoloured, until 30 minutes are left', async ($, on) => {
+  const { ui, clock } = await warmBand($, on, () => answered(45_000, 0), 1)
+  expect(await ui.find({ type: 'Button', text: /≋/ })).toBeUndefined()
+  expect((await ui.find({ type: 'Text', text: /^≋$/ }))?.props.color).toBeUndefined()
+  await clock.advance(30 * 60_000)
+  const live = await ui.find({ type: 'Button', text: /≋/ })
+  expect(live).toBeDefined()
+  expect((await ui.find({ type: 'Text', text: /^≋$/ }))?.props.color).toBe('#DC9180')
   await ui.unmount()
 })
 

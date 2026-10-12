@@ -175,19 +175,21 @@ test('the compact button appears from 30% context, only while idle', () => {
   expect(ctx(85, false).text).toBe('ctx 85% → /compact or hand off')
 })
 
-test('the keep-warm sign is always there; it is live only for a warm cache that can take a request', () => {
+test('the keep-warm sign is always there; it is live only under 30 minutes, for an idle session', () => {
   const cache = (minutesLeft: number, canWarm?: boolean) =>
     formatSegments({ rateLimits: [], cache: { sentAt: 0 }, canWarm, now: (60 - minutesLeft) * 60_000 })[0]
   const live = { kind: 'warm', label: '≋', isEnabled: true }
-  expect(cache(59, true)).toMatchObject({ text: 'cache 59m', level: 'ok', action: live })
+  expect(cache(59, true)).toMatchObject({ text: 'cache 59m', level: 'ok', action: { kind: 'warm', isEnabled: false } })
+  expect(cache(30, true).action).toMatchObject({ isEnabled: false })
+  expect(cache(29, true).action).toMatchObject(live)
   // the colour of the cache segment is what turns as the end nears: one threshold
   expect(cache(21, true)).toMatchObject({ text: 'cache 21m', level: 'ok' })
   expect(cache(20, true)).toMatchObject({ text: 'cache 20m', level: 'warn' })
   expect(cache(5, true)).toMatchObject({ text: 'cache 5m', level: 'warn', action: live })
   expect(cache(0.5, true)).toMatchObject({ text: 'cache <1m', level: 'warn', action: live })
   // a request in flight or one just sent: the sign stays, inert
-  expect(cache(30, false).action).toMatchObject({ kind: 'warm', isEnabled: false })
-  expect(cache(30).action).toMatchObject({ kind: 'warm', isEnabled: false })
+  expect(cache(10, false).action).toMatchObject({ kind: 'warm', isEnabled: false })
+  expect(cache(10).action).toMatchObject({ kind: 'warm', isEnabled: false })
   // a cold cache is not warmed (the request would write the whole prefix again), nor is one not yet started
   const cold = formatSegments({ rateLimits: [], cache: { sentAt: 0 }, canWarm: true, now: 61 * 60_000 })[0]
   expect(cold).toMatchObject({ text: 'cache cold', action: { kind: 'warm', isEnabled: false } })

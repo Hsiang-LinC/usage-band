@@ -271,9 +271,11 @@ export const register: Register = on => {
                   // a fixed cell: the sign is a different width where the font falls back
                   <Box width={3} flexShrink={0}>
                     {s.action.isEnabled ? (
-                      <Button key="warm" plain onPress={() => press($, 'warm')}>{s.action.label}</Button>
+                      <Button key="warm" plain onPress={() => press($, 'warm')}>
+                        <Text color={theme.colors.bad}>{s.action.label}</Text>
+                      </Button>
                     ) : (
-                      <Text dimColor>{s.action.label}</Text>
+                      <Text>{s.action.label}</Text>
                     )}
                   </Box>
                 ) : s.action.isEnabled ? (

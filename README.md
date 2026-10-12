@@ -36,12 +36,13 @@ beside them as buttons:
 - `ctx 45% → compact`: from 30% context, while no request is running. It runs
   `/compact`; a refused or vetoed compact is shown as a toast. The cache then
   starts over (`cache --`), since the prefix has changed.
-- `cache 52m ≋`: the sign is always there, so the band does not shift. Pressed,
-  it sends one tiny request over the session's own prefix (`$.model.fork`),
+- `cache 52m ≋`: the sign is always there, so the band does not shift. Plain
+  and inert while the cache has 30 minutes or more left; with less, it turns
+  red and can be pressed. Pressed, it sends one tiny request over the session's own prefix (`$.model.fork`),
   which reads the cached prefix and restarts the 1h TTL; a toast says how many
-  tokens the cache served. It is dim and inert while a request runs, for 30s
-  after a press, before the first request and once the cache is cold (that
-  request would write the whole prefix again). It is a real request: on a
+  tokens the cache served. It stays plain while a request runs, for 30s
+  after a failed press, before the first request and once the cache is cold
+  (that request would write the whole prefix again). It is a real request: on a
   subscription it counts against the quota. The cache segment turns yellow with
   20 minutes left and red when cold.
 
