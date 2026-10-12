@@ -22,10 +22,9 @@ Test: `claude plugin test .`
 | `~` | about even |
 | `▴` | over a quarter faster |
 
-`5h 50% ▴ 2h10m` reads: half used, burning faster than even, 2h10m to reset. When
-the burn so far would reach 100% before the reset, `full in 1h00m` says when and
-a low share turns yellow. Until a tenth of the window has passed there is no
-pace: 5h shows the plain `↻` reset sign and 7d shows only its share.
+`5h 50% ▴ 2h10m` reads: half used, burning faster than even, 2h10m to reset.
+Until a tenth of the window has passed there is no pace: both show the plain
+`↻` reset sign.
 
 ## Pressing the band
 
@@ -36,7 +35,7 @@ beside them as buttons:
 - `ctx 45% → compact`: from 30% context, while no request is running. It runs
   `/compact`; a refused or vetoed compact is shown as a toast. The cache then
   starts over (`cache --`), since the prefix has changed.
-- `cache 52m ≋`: the sign is always there, so the band does not shift. Plain
+- `cache 52m ♨ hit 90%`: the hot-spring sign is always there, in the place of the dot, so the band does not shift. Plain
   and inert while the cache has 30 minutes or more left; with less, it turns
   red and can be pressed. Pressed, it sends one tiny request over the session's own prefix (`$.model.fork`),
   which reads the cached prefix and restarts the 1h TTL; a toast says how many

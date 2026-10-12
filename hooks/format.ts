@@ -14,9 +14,9 @@ export type Segment = {
 
 // From this context share on, an idle session is offered the compact button.
 export const COMPACT_FROM = 30
-// Steam over a cup. Not the hot-spring sign U+2668: that one is also an emoji,
-// which some terminals draw two cells wide (and in colour) in a one-cell slot.
-export const WARM_SIGN = '≋'
+// The Japanese hot-spring sign (U+2668). It is also an emoji, which some
+// terminals draw two cells wide: the band gives it a fixed two-cell box.
+export const WARM_SIGN = '♨'
 // The cache segment turns yellow with this long left: a simple threshold, so
 // nothing needs drawing at the moment it is crossed beyond the minute tick.
 export const CACHE_WARN_MS = 20 * 60_000
@@ -75,25 +75,14 @@ const SLOW = 0.75
 const FAST = 1.25
 const paceSign = (ratio: number) => (ratio < SLOW ? '▾' : ratio > FAST ? '▴' : '~')
 
-type Pace = {
-  // used share over elapsed share of the window: 1 is an even burn
-  ratio: number
-  // ms until 100% at the burn so far, when that comes before the reset
-  fullIn?: number
-}
-
-function pace(kind: keyof typeof WINDOW_MS, percentUsed: number, resetsAt: string | undefined, now: number): Pace | undefined {
+// Used share over elapsed share of the window: 1 is an even burn.
+function pace(kind: keyof typeof WINDOW_MS, percentUsed: number, resetsAt: string | undefined, now: number): number | undefined {
   if (resetsAt === undefined) return undefined
   const length = WINDOW_MS[kind]
   const left = Date.parse(resetsAt) - now
   const elapsed = length - left
   if (!(left > 0) || elapsed < length * MIN_ELAPSED) return undefined
-  const used = percentUsed / 100
-  const ratio = used / (elapsed / length)
-  if (used <= 0 || used >= 1) return { ratio }
-  // whole minutes, so float noise never moves a displayed minute
-  const fullIn = Math.round(((1 - used) / (used / elapsed)) / 60_000) * 60_000
-  return { ratio, fullIn: fullIn < left ? fullIn : undefined }
+  return percentUsed / 100 / (elapsed / length)
 }
 
 export function formatSegments(i: LineInput): Segment[] {
@@ -144,19 +133,12 @@ export function formatSegments(i: LineInput): Segment[] {
       const pct = Math.floor(w.percentUsed)
       const reset = untilReset(w.resetsAt, i.now)
       const p = pace(kind, w.percentUsed, w.resetsAt, i.now)
-      // the sign says how fast the window is being used; with no pace yet the
-      // 5h window keeps the plain reset sign, and 7d shows nothing
-      const sign = p !== undefined ? paceSign(p.ratio) : kind === 'five_hour' && reset ? '↻' : ''
-      const base = byUsed(pct)
+      // the sign says how fast the window is being used; with no pace yet it
+      // is the plain reset sign
+      const sign = p !== undefined ? paceSign(p) : reset ? '↻' : ''
       parts.push({
-        text: [
-          `${label} ${pct}%`,
-          sign,
-          kind === 'five_hour' ? reset : undefined,
-          p?.fullIn === undefined ? undefined : `full in ${duration(p.fullIn)}`,
-        ].filter(part => part !== undefined && part !== '').join(' '),
-        // running out before the reset is worth a yellow even while the share is low
-        level: p?.fullIn !== undefined && base === 'ok' ? 'warn' : base,
+        text: [`${label} ${pct}%`, sign, reset].filter(part => part !== undefined && part !== '').join(' '),
+        level: byUsed(pct),
         group: 'quota',
       })
     }

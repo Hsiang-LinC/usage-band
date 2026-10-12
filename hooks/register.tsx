@@ -262,14 +262,15 @@ export const register: Register = on => {
               between items come from `gap`, never from spaces in the separators. */}
           <Box gap={1} flexWrap="wrap">
             {segments.flatMap((s, i) => [
-              ...(i > 0
+              // the always-drawn warm sign already separates cache from what follows
+              ...(i > 0 && !(segments[i - 1].action?.kind === 'warm' && segments[i - 1].group === s.group)
                 ? [<Text key={`sep-${i}`} color={theme.neutral}>{segments[i - 1].group === s.group ? '·' : '│'}</Text>]
                 : []),
               <Box key={`seg-${i}`} gap={1}>
                 {body(s)}
                 {s.action === undefined ? null : s.action.kind === 'warm' ? (
                   // a fixed cell: the sign is a different width where the font falls back
-                  <Box width={3} flexShrink={0}>
+                  <Box width={2} flexShrink={0}>
                     {s.action.isEnabled ? (
                       <Button key="warm" plain onPress={() => press($, 'warm')}>
                         <Text color={theme.colors.bad}>{s.action.label}</Text>

@@ -45,7 +45,7 @@ Layout consequences found while building:
 
 ### 3. Keep-warm button
 
-- The sign `≋` (steam) is **always drawn** next to the cache segment, in a fixed 3-cell box (the hot-spring sign U+2668 was tried first: it is also an emoji, which some terminals draw wide and in colour in a one-cell slot, so it was clipped), so the band never shifts. It is one glyph in two states, differing only in colour: plain and inert by default; red and a live Button with under 30 minutes of cache left (`WARM_FROM_MS`) and an idle session. Pressing earlier would only spend quota on a cache that has time. Caveat: a terminal draws a Button's label in its own style, so the red may show on the desktop only. The cache segment's colour is what warns as the end nears: yellow at 20 minutes left, red when cold. The 5s usage poll redraws only when a figure or the minute changed. When cold, `fork` would re-bill the whole prefix as a write, which is the opposite of the intent; no button.
+- The hot-spring sign `♨` (U+2668) is **always drawn** after the cache segment, in a fixed 2-cell box (it is also an emoji, which some terminals draw wide: a one-cell slot clipped it; `≋` and a 3-cell box were tried in between), so the band never shifts. It stands in the place of the `·` between cache and hit, so that separator is not drawn. It is one glyph in two states, differing only in colour: plain and inert by default; red and a live Button with under 30 minutes of cache left (`WARM_FROM_MS`) and an idle session. Pressing earlier would only spend quota on a cache that has time. Caveat: a terminal draws a Button's label in its own style, so the red may show on the desktop only. The cache segment's colour is what warns as the end nears: yellow at 20 minutes left, red when cold. The 5s usage poll redraws only when a figure or the minute changed. When cold, `fork` would re-bill the whole prefix as a write, which is the opposite of the intent; no button.
 - Press → `$.model.fork({ prompt: <minimal> })`; discard the reply. Guard: ignore while one is in flight and within 30 s of the last press (bounded; prevents double-press spend).
 - On success set `warmedAt = now`. The countdown runs from `max(newest pending/answered send, warmedAt)`. A fork does not produce a main-thread `turn.step`, so without this the band would not reset.
 - Failure (`api-error`, `nothing-to-fork`, `aborted`) → toast the reason, leave the countdown untouched.
@@ -55,11 +55,11 @@ Layout consequences found while building:
 
 ### 4. Quota pace (replaces the first idea of view toggles and the detail toasts)
 
-A used-% / time-to-reset toggle added nothing: 5h already shows both. What the API does not give is *whether the burn will last*. From the window length (5h, 7d), `resetsAt` and the used share:
+A used-% / time-to-reset toggle added nothing: 5h already shows both. What the API does not give is *how fast the burn is*. From the window length (5h, 7d), `resetsAt` and the used share:
 
-- `pace = used share / elapsed share` of the window; 1 is an even burn. It is shown as one sign in the place of the old `↻` reset sign: `▾` below 0.75, `▴` above 1.25, `~` between (not `·`, which already separates segments). Five arrows and a speedometer-needle idea were tried and dropped: the three small signs are narrower and clearer.
-- `fullIn = (1 − used) / (used / elapsed)`; shown as `full in 1h00m` only when it comes **before the reset**. It lifts an `ok` level to `warn`.
-- Nothing is shown until 10% of the window has passed (`MIN_ELAPSED`): earlier, the rate is noise. 5h then keeps `↻`; 7d shows its share only.
+- `pace = used share / elapsed share` of the window; 1 is an even burn. It is shown as one sign before the reset time (`5h 50% ▴ 2h10m`; 7d shows its reset too): `▾` below 0.75, `▴` above 1.25, `~` between (not `·`, which already separates segments). Five arrows and a speedometer-needle idea were tried and dropped: the three small signs are narrower and clearer.
+- A projection (`full in 1h00m`, with a yellow lift) was built and removed: the sign and the reset time are enough.
+- Nothing is shown until 10% of the window has passed (`MIN_ELAPSED`): earlier, the rate is noise. Both then keep the plain `↻` reset sign.
 - A press-for-detail toast (an `info` button for hit / 5h / 7d) was built and removed: the band already says what the toast repeated.
 
 ### 5. Compact vs detailed mode

@@ -129,33 +129,22 @@ test('the sign shows how fast the window is being used: slow, even or fast', () 
   expect(sign(50, HOUR)).toBe('▴') // 2.5x
 })
 
-test('a burn that will not last says when it runs out', () => {
-  // 50% used after 1h of 5h: 2.5x an even burn, full in another hour
-  expect(formatLine(five(50, HOUR))).toBe('cache -- · 5h 50% ▴ 4h00m full in 1h00m')
-})
-
-test('running out before the reset turns a low share yellow', () => {
-  expect(formatSegments(five(30, HOUR))[1].level).toBe('warn')
-  expect(formatSegments(five(10, 2 * HOUR))[1].level).toBe('ok')
-})
-
 test('pace waits until a tenth of the window has passed, and needs a reset time', () => {
   // before that the 5h window keeps the plain reset sign
   expect(formatLine(five(40, 0.4 * HOUR))).toBe('cache -- · 5h 40% ↻ 4h36m')
   expect(formatLine({ rateLimits: [{ kind: 'five_hour', percentUsed: 40 }], now: 0 })).toBe('cache -- · 5h 40%')
 })
 
-test('the weekly window gets the sign too, with no reset time of its own', () => {
+test('the weekly window gets the sign and its reset time too', () => {
   const week = 7 * 24 * HOUR
-  // 90% after 1 of 7 days burns 6.3x; the remaining 10% lasts ~2.7h
   const text = (pct: number, elapsed: number) => formatSegments({
     rateLimits: [{ kind: 'seven_day', percentUsed: pct, resetsAt: at(week - elapsed) }],
     now: 0,
   })[1].text
-  expect(text(90, 24 * HOUR)).toBe('7d 90% ▴ full in 2h40m')
-  expect(text(50, 3.5 * 24 * HOUR)).toBe('7d 50% ~')
-  // too early in the week for a pace: nothing but the share
-  expect(text(5, 6 * HOUR)).toBe('7d 5%')
+  expect(text(90, 24 * HOUR)).toBe('7d 90% ▴ 6d00h')
+  expect(text(50, 3.5 * 24 * HOUR)).toBe('7d 50% ~ 3d12h')
+  // too early in the week for a pace: the plain reset sign
+  expect(text(5, 6 * HOUR)).toBe('7d 5% ↻ 6d18h')
 })
 
 test('a full window projects nothing', () => {
@@ -178,7 +167,7 @@ test('the compact button appears from 30% context, only while idle', () => {
 test('the keep-warm sign is always there; it is live only under 30 minutes, for an idle session', () => {
   const cache = (minutesLeft: number, canWarm?: boolean) =>
     formatSegments({ rateLimits: [], cache: { sentAt: 0 }, canWarm, now: (60 - minutesLeft) * 60_000 })[0]
-  const live = { kind: 'warm', label: '≋', isEnabled: true }
+  const live = { kind: 'warm', label: '♨', isEnabled: true }
   expect(cache(59, true)).toMatchObject({ text: 'cache 59m', level: 'ok', action: { kind: 'warm', isEnabled: false } })
   expect(cache(30, true).action).toMatchObject({ isEnabled: false })
   expect(cache(29, true).action).toMatchObject(live)

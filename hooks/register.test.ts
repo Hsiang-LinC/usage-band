@@ -26,10 +26,10 @@ for (const surface of ['terminal', 'desktop'] as const) {
       // the icon's frames differ in glyph width, so a fixed cell keeps the text after it still
       const icon = (await ui.findAll({ type: 'Box' })).filter(box => box.props.width !== undefined)
       // the star's cell, then the keep-warm sign's: inert and uncoloured before any request
-      expect(icon.map(box => box.props)).toMatchObject([{ width: 2, flexShrink: 0 }, { width: 3, flexShrink: 0 }])
+      expect(icon.map(box => box.props)).toMatchObject([{ width: 2, flexShrink: 0 }, { width: 2, flexShrink: 0 }])
       expect(icon[0].children).toMatchObject([{ type: 'Text', children: ['✶'] }])
-      expect(icon[1].children).toMatchObject([{ type: 'Text', children: ['≋'] }])
-      expect((await ui.find({ type: 'Text', text: /^≋$/ }))?.props.color).toBeUndefined()
+      expect(icon[1].children).toMatchObject([{ type: 'Text', children: ['♨'] }])
+      expect((await ui.find({ type: 'Text', text: /^♨$/ }))?.props.color).toBeUndefined()
       await ui.unmount()
     })
   }
@@ -363,9 +363,9 @@ test('a failed keep-warm is toasted and leaves the countdown alone', async ($, o
 test('the keep-warm button waits out a cooldown after a press', async ($, on) => {
   const { ui, forks, clock } = await warmBand($, on, () => ({ isAnswered: false, reason: 'api-error', status: 529, error: 'overloaded', usage: {} }), 52)
   await ui.press({ plugin: 'usage', key: 'warm' })
-  expect(await ui.find({ type: 'Button', text: /≋/ })).toBeUndefined()
+  expect(await ui.find({ type: 'Button', text: /♨/ })).toBeUndefined()
   await clock.advance(31_000)
-  expect(await ui.find({ type: 'Button', text: /≋/ })).toBeDefined()
+  expect(await ui.find({ type: 'Button', text: /♨/ })).toBeDefined()
   await ui.press({ plugin: 'usage', key: 'warm' })
   expect(forks()).toBe(2)
   await ui.unmount()
@@ -373,12 +373,12 @@ test('the keep-warm button waits out a cooldown after a press', async ($, on) =>
 
 test('the keep-warm sign is the same glyph, inert and uncoloured, until 30 minutes are left', async ($, on) => {
   const { ui, clock } = await warmBand($, on, () => answered(45_000, 0), 1)
-  expect(await ui.find({ type: 'Button', text: /≋/ })).toBeUndefined()
-  expect((await ui.find({ type: 'Text', text: /^≋$/ }))?.props.color).toBeUndefined()
+  expect(await ui.find({ type: 'Button', text: /♨/ })).toBeUndefined()
+  expect((await ui.find({ type: 'Text', text: /^♨$/ }))?.props.color).toBeUndefined()
   await clock.advance(30 * 60_000)
-  const live = await ui.find({ type: 'Button', text: /≋/ })
+  const live = await ui.find({ type: 'Button', text: /♨/ })
   expect(live).toBeDefined()
-  expect((await ui.find({ type: 'Text', text: /^≋$/ }))?.props.color).toBe('#DC9180')
+  expect((await ui.find({ type: 'Text', text: /^♨$/ }))?.props.color).toBe('#DC9180')
   await ui.unmount()
 })
 
@@ -408,5 +408,16 @@ test('the 5s poll redraws only when a figure or the minute changed', async ($, o
   const afterChange = renders
   await clock.advance(60_000)
   expect(renders).toBeGreaterThan(afterChange)
+  await ui.unmount()
+})
+
+test('the warm sign stands where the dot between cache and hit would be', async ($, on) => {
+  const { ui } = await warmBand($, on, () => answered(45_000, 0), 1)
+  const texts = (await ui.findAll({ type: 'Text' })).map(t => t.children.join(''))
+  const i = texts.indexOf('♨')
+  expect(i).toBeGreaterThan(-1)
+  expect(texts[i - 1]).toBe('59m')
+  // cache and hit are the only segments here: no dot between them
+  expect(texts).not.toContain('·')
   await ui.unmount()
 })
