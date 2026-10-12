@@ -14,14 +14,25 @@ Test: `claude plugin test .`
 ## Pace
 
 5h and 7d compare the share used with the share of the window that has passed
-(from `resetsAt`): `▴` is a faster burn than an even one, `▾` a slower one. When
-the burn so far would hit 100% before the reset, `→ full 1h00m` says when, and
-a low share turns yellow. Nothing shows until a tenth of the window has passed.
+(from `resetsAt`) and show it as an arrow where the reset sign used to be:
+
+| arrow | burn, against an even one |
+|---|---|
+| `↓` | under half |
+| `↘` | under three quarters |
+| `→` | about even |
+| `↗` | up to twice |
+| `↑` | twice or more |
+
+`5h 50% ↗ 2h10m` reads: half used, burning faster than even, 2h10m to reset. When
+the burn so far would reach 100% before the reset, `full in 1h00m` says when and
+a low share turns yellow. Until a tenth of the window has passed there is no
+pace: 5h shows the plain `↻` reset sign and 7d shows only its share.
 
 ## Pressing the band
 
 A Button is drawn in the surface's own style, so it cannot carry a segment's
-colour. The segments keep their colours as plain text, and the actions sit
+colour. The segments keep their colours as plain text, and the two actions sit
 beside them as buttons:
 
 - `ctx 45% → compact`: from 30% context, while no request is running. It runs
@@ -34,9 +45,6 @@ beside them as buttons:
   whole prefix again). It is a real request: on a subscription it counts against
   the quota. The cache segment turns yellow in the last 5 minutes and red when
   cold, as always.
-- `info` (last on the band): a toast with the detail of `hit` (newest request's
-  read / written / uncached tokens, and the hit rate across the session), `5h`
-  and `7d` (share used, time to reset, pace, time to full).
 
 Click where the terminal reports clicks (not with `CLAUDE_CODE_DISABLE_MOUSE_CLICKS`),
 or press `ctrl+x` then `Tab` to focus the band, move with the arrows and press Enter.

@@ -53,14 +53,14 @@ Layout consequences found while building:
 - Open question (inference, unverified): that a fork's cache read restarts the 1h TTL on the server. Verify empirically before shipping: press at ~55 m, confirm the next real request still reads from cache at ~65 m.
 - Cost: one cache read of the prefix plus a few output tokens. Press-to-extend is only worth it when the user will return within the hour; do not auto-fire (non-goal).
 
-### 4. Quota pace and press-for-detail (replaces the first idea of view toggles)
+### 4. Quota pace (replaces the first idea of view toggles and the detail toasts)
 
 A used-% / time-to-reset toggle added nothing: 5h already shows both. What the API does not give is *whether the burn will last*. From the window length (5h, 7d), `resetsAt` and the used share:
 
-- `pace = used share / elapsed share` of the window; 1 is an even burn. Marker `▴` when > 1.25, `▾` when < 0.75, none between.
-- `fullIn = (1 − used) / (used / elapsed)`; shown as `→ full 1h00m` only when it comes **before the reset**. It lifts an `ok` level to `warn`.
-- Nothing is shown until 10% of the window has passed (`MIN_ELAPSED`): earlier, the rate is noise.
-- Pressing `info` toasts the detail of every segment that has one: `5h` / `7d` (used, time to reset, pace, full-in) and `hit` (newest request's read / written / uncached tokens and the session-wide hit rate). No persisted view state: a press changes nothing on the band.
+- `pace = used share / elapsed share` of the window; 1 is an even burn. It is shown as one arrow in the place of the old `↻` reset sign: `↓` < 0.5, `↘` < 0.75, `→` ≤ 1.25, `↗` < 2, `↑` beyond.
+- `fullIn = (1 − used) / (used / elapsed)`; shown as `full in 1h00m` only when it comes **before the reset**. It lifts an `ok` level to `warn`.
+- Nothing is shown until 10% of the window has passed (`MIN_ELAPSED`): earlier, the rate is noise. 5h then keeps `↻`; 7d shows its share only.
+- A press-for-detail toast (an `info` button for hit / 5h / 7d) was built and removed: the band already says what the toast repeated.
 
 ### 5. Compact vs detailed mode
 
