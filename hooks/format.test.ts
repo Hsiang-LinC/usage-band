@@ -114,20 +114,20 @@ const five = (pct: number, elapsed: number) => ({
 })
 
 test('the sign shows how fast the window is being used: slow, even or fast', () => {
-  // an even burn is 50% used halfway through the 5h window
+  // an even burn is 50% used halfway through the 5h window; within 5 points is even
   const sign = (pct: number, elapsed: number) => formatLine(five(pct, elapsed)).replace(/^cache -- · 5h \d+% (\S).*$/, '$1')
-  expect(sign(10, 2.5 * HOUR)).toBe('▾') // 0.2x
-  expect(sign(30, 2.5 * HOUR)).toBe('▾') // 0.6x
-  expect(sign(40, 2.5 * HOUR)).toBe('•') // 0.8x
-  expect(sign(50, 2.5 * HOUR)).toBe('•') // 1x
-  expect(sign(62, 2.5 * HOUR)).toBe('•') // 1.24x
-  expect(sign(70, 2.5 * HOUR)).toBe('▴') // 1.4x
-  expect(sign(50, HOUR)).toBe('▴') // 2.5x
+  expect(sign(10, 2.5 * HOUR)).toBe('▾')
+  expect(sign(44, 2.5 * HOUR)).toBe('▾')
+  expect(sign(45, 2.5 * HOUR)).toBe('⋅')
+  expect(sign(50, 2.5 * HOUR)).toBe('⋅')
+  expect(sign(55, 2.5 * HOUR)).toBe('⋅')
+  expect(sign(56, 2.5 * HOUR)).toBe('▴')
+  expect(sign(50, HOUR)).toBe('▴')
 })
 
-test('pace waits until a tenth of the window has passed, and needs a reset time', () => {
-  // before that the 5h window keeps the plain reset sign
-  expect(formatLine(five(40, 0.4 * HOUR))).toBe('cache -- · 5h 40% ◦ 4h36m')
+test('pace counts from the start of the window, and needs a reset time', () => {
+  expect(formatLine(five(40, 0.4 * HOUR))).toBe('cache -- · 5h 40% ▴ 4h36m')
+  expect(formatLine(five(0, 0))).toBe('cache -- · 5h 0% ⋅ 5h00m')
   expect(formatLine({ rateLimits: [{ kind: 'five_hour', percentUsed: 40 }], now: 0 })).toBe('cache -- · 5h 40%')
 })
 
@@ -138,9 +138,8 @@ test('the weekly window gets the sign, but no reset time', () => {
     now: 0,
   })[1].text
   expect(text(90, 24 * HOUR)).toBe('7d 90% ▴')
-  expect(text(50, 3.5 * 24 * HOUR)).toBe('7d 50% •')
-  // too early in the week for a pace: nothing but the share
-  expect(text(5, 6 * HOUR)).toBe('7d 5%')
+  expect(text(50, 3.5 * 24 * HOUR)).toBe('7d 50% ⋅')
+  expect(text(5, 6 * HOUR)).toBe('7d 5% ⋅')
 })
 
 test('a full window projects nothing', () => {
@@ -174,6 +173,7 @@ test('the keep-warm sign is always there; it is live only under 30 minutes, for 
   expect(cache(10).action).toMatchObject({ kind: 'warm', isEnabled: false })
   // a cold cache is not warmed (the request would write the whole prefix again), nor is one not yet started
   const cold = formatSegments({ rateLimits: [], cache: { sentAt: 0 }, canWarm: true, now: 61 * 60_000 })[0]
-  expect(cold).toMatchObject({ text: 'cache cold', action: { kind: 'warm', isEnabled: false } })
-  expect(formatSegments({ rateLimits: [], canWarm: true, now: 0 })[0]).toMatchObject({ text: 'cache --', action: { kind: 'warm', isEnabled: false } })
+  expect(cold).toMatchObject({ text: 'cache cold', action: { kind: 'warm', isEnabled: false, tone: 'cold' } })
+  expect(cache(10, false).action).toMatchObject({ tone: 'hot' })
+  expect(formatSegments({ rateLimits: [], canWarm: true, now: 0 })[0]).toMatchObject({ text: 'cache --', action: { kind: 'warm', isEnabled: false, tone: 'none' } })
 })

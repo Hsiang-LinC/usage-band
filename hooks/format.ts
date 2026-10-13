@@ -5,11 +5,14 @@ export type Level = 'ok' | 'warn' | 'bad' | 'none'
 // `action` is a button drawn after the segment (a Button cannot carry the
 // segment's colours). A disabled action keeps its place, drawn dim and inert,
 // so the band does not shift when the action comes and goes.
+// The warm sign's colour: red while the cache is hot, cool blue once it has
+// gone cold, plain before any request has started it.
+export type WarmTone = 'hot' | 'cold' | 'none'
 export type Segment = {
   text: string
   level: Level
   group: 'session' | 'quota'
-  action?: { kind: 'compact' | 'warm'; label: string; isEnabled: boolean }
+  action?: { kind: 'compact' | 'warm'; label: string; isEnabled: boolean; tone?: WarmTone }
 }
 
 // Usage turns yellow at WARN_AT and red at BAD_AT; ctx is pressable (compact)
@@ -23,8 +26,8 @@ export const WARM_SIGN = '♨'
 // The cache segment turns yellow with this long left: a simple threshold, so
 // nothing needs drawing at the moment it is crossed beyond the minute tick.
 export const CACHE_WARN_MS = 20 * 60_000
-// The warm sign is live (red, pressable) with less than this left; before that
-// it is the same sign, uncoloured and inert.
+// The warm sign is pressable with less than this left; before that it is the
+// same sign, inert.
 export const WARM_FROM_MS = 30 * 60_000
 
 type Usage = { input: number; cacheRead: number; cacheWrite: number }
@@ -70,24 +73,23 @@ const hitPercent = (u: Usage | undefined): number | undefined => {
 }
 
 const WINDOW_MS = { five_hour: 5 * 3_600_000, seven_day: 7 * 86_400_000 } as const
-// Too little of a window has passed for its burn rate to say anything.
-const MIN_ELAPSED = 0.1
-// Pace ratio (1 is an even burn) under SLOW or over FAST is marked; between,
-// the plain sign. A small solid dot rather than `~` or `·` (the
-// separator): it shares the triangles' size and weight. Before a pace exists,
-// 5h shows the hollow version of the same dot.
-const SLOW = 0.75
-const FAST = 1.25
-const paceSign = (ratio: number) => (ratio < SLOW ? '▾' : ratio > FAST ? '▴' : '•')
+// The pace signs; the band colours ▴ red and ▾ green. The dot is the smaller
+// U+22C5, so it does not outweigh the triangles.
+export const PACE_FAST = '▴'
+export const PACE_SLOW = '▾'
+export const PACE_EVEN = '⋅'
+// Used share within this many points of the elapsed share counts as even. Points
+// rather than a ratio: a ratio is unstable at the start of a window.
+const EVEN_BAND = 5
+const paceSign = (diff: number) => (diff > EVEN_BAND ? PACE_FAST : diff < -EVEN_BAND ? PACE_SLOW : PACE_EVEN)
 
-// Used share over elapsed share of the window: 1 is an even burn.
+// Used share minus elapsed share of the window, in points: 0 is an even burn.
 function pace(kind: keyof typeof WINDOW_MS, percentUsed: number, resetsAt: string | undefined, now: number): number | undefined {
   if (resetsAt === undefined) return undefined
   const length = WINDOW_MS[kind]
   const left = Date.parse(resetsAt) - now
-  const elapsed = length - left
-  if (!(left > 0) || elapsed < length * MIN_ELAPSED) return undefined
-  return percentUsed / 100 / (elapsed / length)
+  if (!(left > 0)) return undefined
+  return percentUsed - ((length - left) / length) * 100
 }
 
 export function formatSegments(i: LineInput): Segment[] {
@@ -103,13 +105,13 @@ export function formatSegments(i: LineInput): Segment[] {
 
   const c = i.cache
   // always drawn: live only for a warm cache under 30 minutes, with an idle session
-  const warm = (isEnabled: boolean) => ({ kind: 'warm' as const, label: WARM_SIGN, isEnabled })
+  const warm = (isEnabled: boolean, tone: WarmTone) => ({ kind: 'warm' as const, label: WARM_SIGN, isEnabled, tone })
   if (c === undefined) {
-    parts.push({ text: 'cache --', level: 'none', group: 'session', action: warm(false) })
+    parts.push({ text: 'cache --', level: 'none', group: 'session', action: warm(false, 'none') })
   } else {
     const remaining = c.sentAt + CACHE_TTL_MS - i.now
     if (remaining <= 0) {
-      parts.push({ text: 'cache cold', level: 'bad', group: 'session', action: warm(false) })
+      parts.push({ text: 'cache cold', level: 'bad', group: 'session', action: warm(false, 'cold') })
     } else {
       const text =
         remaining < 60_000 ? 'cache <1m' : `cache ${Math.floor(remaining / 60_000)}m`
@@ -118,7 +120,7 @@ export function formatSegments(i: LineInput): Segment[] {
         text,
         level,
         group: 'session',
-        action: warm(i.canWarm === true && remaining < WARM_FROM_MS),
+        action: warm(i.canWarm === true && remaining < WARM_FROM_MS, 'hot'),
       })
       const hit = hitPercent(c.usage)
       if (hit !== undefined) parts.push({ text: `hit ${hit}%`, level, group: 'session' })
@@ -134,9 +136,8 @@ export function formatSegments(i: LineInput): Segment[] {
       const pct = Math.floor(w.percentUsed)
       const reset = untilReset(w.resetsAt, i.now)
       const p = pace(kind, w.percentUsed, w.resetsAt, i.now)
-      // the sign says how fast the window is being used; with no pace yet the
-      // 5h window shows the plain reset sign. 7d shows no reset time.
-      const sign = p !== undefined ? paceSign(p) : kind === 'five_hour' && reset ? '◦' : ''
+      // the sign says how fast the window is being used; 7d shows no reset time
+      const sign = p !== undefined ? paceSign(p) : ''
       parts.push({
         text: [`${label} ${pct}%`, sign, kind === 'five_hour' ? reset : undefined].filter(part => part !== undefined && part !== '').join(' '),
         level: byUsed(pct),

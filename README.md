@@ -18,13 +18,13 @@ Test: `claude plugin test .`
 
 | sign | burn, against an even one |
 |---|---|
-| `▾` | under three quarters |
-| `•` | about even |
-| `▴` | over a quarter faster |
+| `▾` (green) | more than 5 points under the elapsed share |
+| `⋅` (yellow) | within 5 points |
+| `▴` (red) | more than 5 points over |
 
 `5h 50% ▴ 2h10m` reads: half used, burning faster than even, 2h10m to reset.
-Until a tenth of the window has passed there is no pace: 5h shows a hollow `◦`
-reset sign and 7d only its share.
+The pace counts from the start of the window. The `♨` is red while the cache is hot,
+light blue once it has gone cold, and plain before the first request.
 
 ## Pressing the band
 

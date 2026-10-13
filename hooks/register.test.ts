@@ -41,7 +41,7 @@ for (const surface of ['terminal', 'desktop'] as const) {
     engineBand(on)
     on('session.measure', () => ({ changed: [] }))
     on('config.list', () => ({ value: [{ key: 'theme', label: 'Theme', kind: 'choice', value: 'dark', provider: { kind: 'engine' }, isLocked: false }] }))
-    await $.session.measure({ context: { percent: 32 }, rateLimits: [{ kind: 'five_hour', percentUsed: 86 }] })
+    await $.session.measure({ context: { percent: 32 }, rateLimits: [{ kind: 'five_hour', percentUsed: 86 }, { kind: 'seven_day', percentUsed: 30 }] })
     const ui = await $.ui.mount({ plugin: 'usage', surface, component: 'AbovePrompt', requestId: 'run-band', props: { hasSurvey: false, isWorking: false, maxRows: 1, bodyColumns: 120, scroll: { offset: 0, bodyRows: 1 }, view: {} } })
     // the desktop draws Box as a flex row and trims the whitespace at each
     // flex item's edges, so the spacing between items is `gap`, and no item
@@ -50,8 +50,8 @@ for (const surface of ['terminal', 'desktop'] as const) {
     expect(row.type).toBe('Box')
     expect(row.children).toMatchObject([{ type: 'Box', props: { width: 2 } }, { type: 'Box', props: { gap: 1 } }])
     const texts = (await ui.findAll({ type: 'Text' })).map(text => text.text)
-    expect(texts.filter(text => text === '·' || text === '│')).toEqual(['·', '│'])
-    expect(texts.filter(text => /^ | $/.test(text) && text.length > 1 && !/^(ctx|cache|5h) $/.test(text))).toEqual([])
+    expect(texts.filter(text => text === '·' || text === '│')).toEqual(['·', '│', '│'])
+    expect(texts.filter(text => /^ | $/.test(text) && text.length > 1 && !/^(ctx|cache|5h|7d) $/.test(text))).toEqual([])
     await ui.unmount()
   })
 }
@@ -370,10 +370,10 @@ test('the keep-warm button waits out a cooldown after a press', async ($, on) =>
   await ui.unmount()
 })
 
-test('the keep-warm sign is the same glyph, inert and uncoloured, until 30 minutes are left', async ($, on) => {
+test('the keep-warm sign is red while the cache is hot, inert until 30 minutes are left', async ($, on) => {
   const { ui, clock } = await warmBand($, on, () => answered(45_000, 0), 1)
   expect(await ui.find({ type: 'Button', text: /♨/ })).toBeUndefined()
-  expect((await ui.find({ type: 'Text', text: /^♨$/ }))?.props.color).toBeUndefined()
+  expect((await ui.find({ type: 'Text', text: /^♨$/ }))?.props.color).toBe('#DC9180')
   await clock.advance(30 * 60_000)
   const live = await ui.find({ type: 'Button', text: /♨/ })
   expect(live).toBeDefined()

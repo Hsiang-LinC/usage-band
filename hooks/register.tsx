@@ -1,6 +1,6 @@
 import type { EngineInterface, Register, Timer } from 'claude-code'
 
-import { formatSegments, type Level, type LineInput } from './format'
+import { formatSegments, PACE_EVEN, PACE_FAST, PACE_SLOW, type Level, type LineInput } from './format'
 
 type CacheUsage = NonNullable<NonNullable<LineInput['cache']>['usage']>
 // newest main-thread request whose response reported usage
@@ -30,16 +30,18 @@ const FRAME_COUNT = STARS.length * 3
 const PALETTES = {
   light: {
     neutral: '#61675F',
+    cool: '#4A8DB7',
     colors: { ok: '#286044', warn: '#755812', bad: '#983E32', none: '#61675F' },
     stars: ['#755812', '#416579', '#983E32'],
   },
   dark: {
     neutral: '#A2A99F',
+    cool: '#8EC5E8',
     colors: { ok: '#82B58B', warn: '#C5A35B', bad: '#DC9180', none: '#A2A99F' },
     stars: ['#C5A35B', '#8BAABD', '#DC9180'],
   },
 } satisfies Record<'light' | 'dark', {
-  neutral: string; colors: Record<Level, string>; stars: string[]
+  neutral: string; cool: string; colors: Record<Level, string>; stars: string[]
 }>
 
 // The mod API exposes the selected theme, not auto's resolved appearance.
@@ -241,15 +243,23 @@ export const register: Register = on => {
     const beneath = await next(e)
     const { Box, Button, Text } = $.ui.resolve(e)
     const theme = await palette($)
-    // label dim-free, values bold: "5h 20% ▾ 2h13m" bolds 20% and 2h13m
+    // label dim-free, values bold: "5h 20% ▾ 2h13m" bolds 20% and 2h13m;
+    // the pace sign has its own colour: fast red, slow green, even yellow
+    const paceColor: Record<string, string | undefined> = { [PACE_FAST]: theme.colors.bad, [PACE_SLOW]: theme.colors.ok, [PACE_EVEN]: theme.colors.warn }
     const body = (s: (typeof segments)[number]) => (
       <Text color={theme.colors[s.level]}>
         <Text>{s.text.slice(0, s.text.indexOf(' ') + 1)}</Text>
-        {s.text.slice(s.text.indexOf(' ') + 1).split(/(<?\d+(?:[dh]\d+)?[dhm%])/).filter(text => text !== '').map((text, j) => (
-          <Text key={String(j)} bold={/^(<?\d+(?:[dh]\d+)?[dhm%])$/.test(text)}>{text}</Text>
-        ))}
+        {s.text.slice(s.text.indexOf(' ') + 1).split(/(<?\d+(?:[dh]\d+)?[dhm%]|[▴▾⋅])/).filter(text => text !== '').map((text, j) =>
+          text in paceColor ? (
+            <Text key={String(j)} color={paceColor[text]}>{text}</Text>
+          ) : (
+            <Text key={String(j)} bold={/^(<?\d+(?:[dh]\d+)?[dhm%])$/.test(text)}>{text}</Text>
+          ),
+        )}
       </Text>
     )
+    const warmColor = (tone: 'hot' | 'cold' | 'none' | undefined) =>
+      tone === 'hot' ? theme.colors.bad : tone === 'cold' ? theme.cool : undefined
     return (
       <Box flexDirection="column">
         <Box paddingX={1}>
@@ -264,7 +274,7 @@ export const register: Register = on => {
             {segments.flatMap((s, i) => [
               // the always-drawn warm sign already separates cache from what follows
               ...(i > 0 && !(segments[i - 1].action?.kind === 'warm' && segments[i - 1].group === s.group)
-                ? [<Text key={`sep-${i}`} color={theme.neutral}>{segments[i - 1].group === s.group ? '·' : '│'}</Text>]
+                ? [<Text key={`sep-${i}`} color={theme.neutral}>{segments[i - 1].group === 'session' && s.group === 'session' ? '·' : '│'}</Text>]
                 : []),
               <Box key={`seg-${i}`} gap={1}>
                 {s.action?.kind === 'compact' && s.action.isEnabled ? (
@@ -274,16 +284,18 @@ export const register: Register = on => {
                   body(s)
                 )}
                 {s.action === undefined || s.action.kind === 'compact' ? null : s.action.kind === 'warm' ? (
-                  // a fixed cell: the sign is a different width where the font falls back
-                  <Box width={2} flexShrink={0}>
-                    {s.action.isEnabled ? (
-                      <Button key="warm" plain onPress={() => press($, 'warm')}>
-                        <Text color={theme.colors.bad}>{s.action.label}</Text>
-                      </Button>
-                    ) : (
-                      <Text>{s.action.label}</Text>
-                    )}
-                  </Box>
+                  s.action.isEnabled ? (
+                    // sized by the Button itself: it adds its own padding, which a
+                    // fixed 2-cell box clipped to half the sign
+                    <Button key="warm" plain onPress={() => press($, 'warm')}>
+                      <Text color={warmColor(s.action.tone)}>{s.action.label}</Text>
+                    </Button>
+                  ) : (
+                    // a fixed cell: the sign is a different width where the font falls back
+                    <Box width={2} flexShrink={0}>
+                      <Text color={warmColor(s.action.tone)}>{s.action.label}</Text>
+                    </Box>
+                  )
                 ) : null}
               </Box>,
             ])}
